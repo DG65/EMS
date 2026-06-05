@@ -1,5 +1,10 @@
 {
-  "id": "{E5CB9800-B6A2-42E0-A00F-233247EB521B}",
+  "id": "{DEINE-NEUE-GUID}",
   "name": "Energy Management System",
-  "type": 3
+  "type": 3,
+  "vendor": "DG Energy",
+  "aliases": [ "EMS" ],
+  "parentRequirements": [],
+  "childRequirements": [],
+  "implemented": []
 }
