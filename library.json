@@ -3,7 +3,7 @@
     "author": "DG65",
     "name": "EMS",
     "compatibility": {
-    "version": "8.0"
+      "version": "8.0"
     },
     "version": "0.1",
     "build": 1,
