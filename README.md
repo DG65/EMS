@@ -34,7 +34,7 @@ Das Modul ist modular aufgebaut: Jeder Geräteblock (Wechselrichter, Batterie, W
 
 ## Voraussetzungen
 
-- IP-Symcon ab Version 7.0
+- IP-Symcon ab Version 9.0
 - Goodwe Wechselrichter bereits via Modbus-TCP in IPS eingebunden
 - Für Wallboxsteuerung: go-e Charger Modul (IPSCoyote/GO-eCharger) installiert
 - Für Preisoptimierung: TibberV2-Modul (da8ter) installiert
