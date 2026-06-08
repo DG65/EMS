@@ -19,7 +19,7 @@
     "prefix": "EMS",
     "version": "0.1",
     "compatibility": {
-        "version": "7.0",
+        "version": "9.0",
         "date": 1704067200
     },
     "description": {
