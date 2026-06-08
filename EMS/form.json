@@ -1,0 +1,1156 @@
+{
+    "elements": [
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "🔧 Allgemein & Schutz",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "EMS_Active",
+                    "caption": "EMS aktiv"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "EMS_Interval",
+                    "caption": "Aktualisierungsintervall (Sekunden)",
+                    "minimum": 5,
+                    "maximum": 300,
+                    "suffix": " s"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Netzanschluss-Limits ──────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "EMS_SLS_Limit_A",
+                    "caption": "SLS-Grenze (Ampere)",
+                    "minimum": 10,
+                    "maximum": 100,
+                    "suffix": " A"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "EMS_HAK_Limit_A",
+                    "caption": "HAK-Grenze (Ampere)",
+                    "minimum": 10,
+                    "maximum": 100,
+                    "suffix": " A"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "EMS_SLS_Limit_W",
+                    "caption": "SLS-Grenze (Watt, berechnet)",
+                    "minimum": 1000,
+                    "maximum": 100000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Fallback bei Kommunikationsfehler ──────"
+                },
+                {
+                    "type": "Select",
+                    "name": "EMS_Fallback_Mode",
+                    "caption": "Fallback-Modus",
+                    "options": [
+                        { "caption": "Automatik (Goodwe entscheidet)", "value": 1 },
+                        { "caption": "Gestoppt (Batterie inaktiv)",    "value": 0 },
+                        { "caption": "Bereitschaft (SOC halten)",      "value": 8 }
+                    ]
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "EMS_Fallback_Timeout",
+                    "caption": "Timeout bis Fallback (Sekunden)",
+                    "minimum": 10,
+                    "maximum": 300,
+                    "suffix": " s"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Logging ──────────────────────────────"
+                },
+                {
+                    "type": "Select",
+                    "name": "EMS_Log_Level",
+                    "caption": "Logging-Level",
+                    "options": [
+                        { "caption": "Aus",        "value": 0 },
+                        { "caption": "Basis",      "value": 1 },
+                        { "caption": "Detailliert","value": 2 }
+                    ]
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "📡 Netzmesspunkte",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "── Primärmessung: Goodwe SmartMeter (Pflicht) ──"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_L1_Power",
+                    "caption": "Netz L1 Leistung (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_L2_Power",
+                    "caption": "Netz L2 Leistung (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_L3_Power",
+                    "caption": "Netz L3 Leistung (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_Total_Power",
+                    "caption": "Netz Gesamtleistung (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_L1_Current",
+                    "caption": "Netz L1 Strom (A)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_L2_Current",
+                    "caption": "Netz L2 Strom (A)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_L3_Current",
+                    "caption": "Netz L3 Strom (A)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_Frequency",
+                    "caption": "Netzfrequenz (Hz)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_SM_Status",
+                    "caption": "SmartMeter Verbindungsstatus",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Sekundärmessung: Siemens PAC2200 (optional) ──"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "PAC2200_Active",
+                    "caption": "PAC2200 aktivieren"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_L1_Power",
+                    "caption": "PAC2200 Wirkleistung L1 (W)",
+                    "validVariableTypes": [ 1, 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_L2_Power",
+                    "caption": "PAC2200 Wirkleistung L2 (W)",
+                    "validVariableTypes": [ 1, 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_L3_Power",
+                    "caption": "PAC2200 Wirkleistung L3 (W)",
+                    "validVariableTypes": [ 1, 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_L1_Current",
+                    "caption": "PAC2200 Strom L1 (A)",
+                    "validVariableTypes": [ 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_L2_Current",
+                    "caption": "PAC2200 Strom L2 (A)",
+                    "validVariableTypes": [ 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_L3_Current",
+                    "caption": "PAC2200 Strom L3 (A)",
+                    "validVariableTypes": [ 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_Energy_Import",
+                    "caption": "PAC2200 Wirkarbeit Bezug (Wh)",
+                    "validVariableTypes": [ 2 ],
+                    "visible": false
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PAC_Energy_Export",
+                    "caption": "PAC2200 Wirkarbeit Abgabe (Wh)",
+                    "validVariableTypes": [ 2 ],
+                    "visible": false
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "⚡ Wechselrichter & PV",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "── EMS Steuerregister (schreibend) ──────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_EMS_Mode",
+                    "caption": "EMS Leistungsmodus (ID 49060)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_EMS_Power",
+                    "caption": "EMS Leistungseinstellung (ID 20610, W)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Export_Enable",
+                    "caption": "Leistungsexport Ja/Nein (ID 53749)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Export_Limit",
+                    "caption": "Limit Leistungsexport (ID 54017, W)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Goodwe Zeitfenster (schreibend) ─────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time1_Start",
+                    "caption": "Startzeit 1 (ID 53840)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time1_End",
+                    "caption": "Endzeit 1 (ID 19775)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time1_Power",
+                    "caption": "Batterieleistung 1 in Prozent (ID 23711)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time1_Week",
+                    "caption": "Arbeitswoche 1 (ID 27399)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time2_Start",
+                    "caption": "Startzeit 2 (ID 59917)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time2_End",
+                    "caption": "Endzeit 2 (ID 58454)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time2_Power",
+                    "caption": "Batterieleistung 2 in Prozent (ID 24072)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time2_Week",
+                    "caption": "Arbeitswoche 2 (ID 44592)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time3_Start",
+                    "caption": "Startzeit 3 (ID 29220)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time3_End",
+                    "caption": "Endzeit 3 (ID 56194)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time3_Power",
+                    "caption": "Batterieleistung 3 in Prozent (ID 36069)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time3_Week",
+                    "caption": "Arbeitswoche 3 (ID 20549)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time4_Start",
+                    "caption": "Startzeit 4 (ID 55084)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time4_End",
+                    "caption": "Endzeit 4 (ID 36555)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time4_Power",
+                    "caption": "Batterieleistung 4 in Prozent (ID 24977)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Time4_Week",
+                    "caption": "Arbeitswoche 4 (ID 53902)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── PV Messwerte (lesend) ──────────────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PV_Total_Power",
+                    "caption": "PV Gesamtleistung P Total (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PV_Day_Energy",
+                    "caption": "PV Tageserzeugung (kWh)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "PV_MPPT_Active",
+                    "caption": "MPPT-Einzelwerte erfassen (optional)"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PV_MPPT1_Power",
+                    "caption": "P MPPT1 (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PV_MPPT2_Power",
+                    "caption": "P MPPT2 (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_PV_MPPT3_Power",
+                    "caption": "P MPPT3 (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Wechselrichter Messwerte (lesend) ────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Total_Power",
+                    "caption": "WR Gesamtleistung AC (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Temp",
+                    "caption": "WR Temperatur Gerät (°C)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Temp_Cooler",
+                    "caption": "WR Temperatur Kühlkörper (°C)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Diag_Status",
+                    "caption": "WR Diagnose Status",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Backup_Power",
+                    "caption": "Backup Leistung Gesamt (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WR_Backup_Active",
+                    "caption": "Backup aktiv (0/1)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Schutzschwellen Wechselrichter ───────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "EMS_WR_Temp_Max",
+                    "caption": "Max. WR-Temperatur für Drosselung (°C)",
+                    "minimum": 50,
+                    "maximum": 90,
+                    "suffix": " °C"
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "🔋 Batteriespeicher",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "BAT_Active",
+                    "caption": "Batteriespeicher aktivieren"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_String_Count",
+                    "caption": "Anzahl Batteriestrings",
+                    "minimum": 1,
+                    "maximum": 4
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_Capacity_kWh",
+                    "caption": "Gesamtkapazität Batteriespeicher (kWh)",
+                    "minimum": 1,
+                    "maximum": 500,
+                    "suffix": " kWh"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── SOC-Grenzen ──────────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_SOC_Min",
+                    "caption": "Minimaler SOC Entladeschutz (%)",
+                    "minimum": 0,
+                    "maximum": 50,
+                    "suffix": " %"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_SOC_Target_Night",
+                    "caption": "Ziel-SOC Nacht-Laden (%)",
+                    "minimum": 50,
+                    "maximum": 100,
+                    "suffix": " %"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_SOC_Target_Day",
+                    "caption": "Ziel-SOC PV-Puffer Tag (%)",
+                    "minimum": 10,
+                    "maximum": 100,
+                    "suffix": " %"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_SOC_Reserve_Backup",
+                    "caption": "SOC-Reserve Backup/Notfall (%)",
+                    "minimum": 0,
+                    "maximum": 30,
+                    "suffix": " %"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Temperaturschutz ─────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_Temp_Max",
+                    "caption": "Max. Batterietemperatur für Drosselung (°C)",
+                    "minimum": 30,
+                    "maximum": 60,
+                    "suffix": " °C"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_Cell_Voltage_Max",
+                    "caption": "Max. Zellspannung Schutzgrenze (mV)",
+                    "minimum": 3400,
+                    "maximum": 3800,
+                    "suffix": " mV"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BAT_Cell_Voltage_Min",
+                    "caption": "Min. Zellspannung Schutzgrenze (mV)",
+                    "minimum": 2500,
+                    "maximum": 3200,
+                    "suffix": " mV"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Batteriestring 1 ─────────────────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_SOC",
+                    "caption": "Bat1 SOC (%)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Power",
+                    "caption": "Bat1 Leistung (W)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Mode",
+                    "caption": "Bat1 Modus",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_SOH",
+                    "caption": "Bat1 SOH (%)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Temp",
+                    "caption": "Bat1 Paket Temperatur (°C)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Cell_V_Max",
+                    "caption": "Bat1 höchste Zellspannung (mV)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Cell_V_Min",
+                    "caption": "Bat1 niedrigste Zellspannung (mV)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Min_SOC_Online",
+                    "caption": "Bat1 Min SOC ONLINE (schreibend, %)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT1_Min_SOC_Offline",
+                    "caption": "Bat1 Min SOC OFFLINE (schreibend, %)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Batteriestring 2 (optional) ──────────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_SOC",
+                    "caption": "Bat2 SOC (%)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Power",
+                    "caption": "Bat2 Leistung (W)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Mode",
+                    "caption": "Bat2 Modus",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_SOH",
+                    "caption": "Bat2 SOH (%)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Temp",
+                    "caption": "Bat2 Paket Temperatur (°C)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Cell_V_Max",
+                    "caption": "Bat2 höchste Zellspannung (mV)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Cell_V_Min",
+                    "caption": "Bat2 niedrigste Zellspannung (mV)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Min_SOC_Online",
+                    "caption": "Bat2 Min SOC ONLINE (schreibend, %)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_BAT2_Min_SOC_Offline",
+                    "caption": "Bat2 Min SOC OFFLINE (schreibend, %)",
+                    "validVariableTypes": [ 1 ]
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "🚗 Wallboxen",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "WB_Active",
+                    "caption": "Wallboxen aktivieren"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB_Count",
+                    "caption": "Anzahl Wallboxen",
+                    "minimum": 1,
+                    "maximum": 8
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "WB_GridRewards_Active",
+                    "caption": "Grid Rewards Modus aktiv (Tibber steuert Wallbox)"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Wallbox 1 ────────────────────────────"
+                },
+                {
+                    "type": "SelectInstance",
+                    "name": "WB1_Instance",
+                    "caption": "Wallbox 1 — go-e Charger Instanz-ID"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB1_Max_Power_W",
+                    "caption": "WB1 maximale Ladeleistung (W)",
+                    "minimum": 1380,
+                    "maximum": 22000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB1_Min_Power_W",
+                    "caption": "WB1 minimale Ladeleistung (W)",
+                    "minimum": 1380,
+                    "maximum": 22000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB1_Priority",
+                    "caption": "WB1 Priorität (1 = höchste)",
+                    "minimum": 1,
+                    "maximum": 8
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB1_Status",
+                    "caption": "WB1 Status",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB1_Power",
+                    "caption": "WB1 Aktuelle Leistung (kW)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB1_Active",
+                    "caption": "WB1 Wallbox aktiv (Boolean)",
+                    "validVariableTypes": [ 0 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB1_Cable",
+                    "caption": "WB1 Kabel-Leistungsfähigkeit",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB1_Phases",
+                    "caption": "WB1 Aktuell genutzte Phasen",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB1_Error",
+                    "caption": "WB1 Fehler",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Wallbox 2 (optional) ─────────────────────"
+                },
+                {
+                    "type": "SelectInstance",
+                    "name": "WB2_Instance",
+                    "caption": "Wallbox 2 — go-e Charger Instanz-ID"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB2_Max_Power_W",
+                    "caption": "WB2 maximale Ladeleistung (W)",
+                    "minimum": 1380,
+                    "maximum": 22000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB2_Min_Power_W",
+                    "caption": "WB2 minimale Ladeleistung (W)",
+                    "minimum": 1380,
+                    "maximum": 22000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB2_Priority",
+                    "caption": "WB2 Priorität (1 = höchste)",
+                    "minimum": 1,
+                    "maximum": 8
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB2_Status",
+                    "caption": "WB2 Status",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB2_Power",
+                    "caption": "WB2 Aktuelle Leistung (kW)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB2_Active",
+                    "caption": "WB2 Wallbox aktiv (Boolean)",
+                    "validVariableTypes": [ 0 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB2_Cable",
+                    "caption": "WB2 Kabel-Leistungsfähigkeit",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB2_Phases",
+                    "caption": "WB2 Aktuell genutzte Phasen",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_WB2_Error",
+                    "caption": "WB2 Fehler",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Ladesteuerung ────────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB_Cooldown_Sec",
+                    "caption": "Cooldown zwischen Schaltvorgängen (Sek.)",
+                    "minimum": 30,
+                    "maximum": 600,
+                    "suffix": " s"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "WB_Min_Charge_Min",
+                    "caption": "Mindestladezeit nach Freigabe (Min.)",
+                    "minimum": 1,
+                    "maximum": 60,
+                    "suffix": " min"
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "🌡️ Wärmepumpe (Monitoring)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "HP_Active",
+                    "caption": "Wärmepumpe aktivieren (nur Monitoring)"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_HP_Power",
+                    "caption": "Leistung zur Wärmeerzeugung (W)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_HP_State",
+                    "caption": "Wärmepumpenstatus (Ein/Aus)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_HP_Outside_Temp",
+                    "caption": "Aussentemperatur (°C)",
+                    "validVariableTypes": [ 1, 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_HP_Mode",
+                    "caption": "Betriebsmodus (Heizen/Kühlen/BW)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_HP_COP_Heat",
+                    "caption": "COP-Wert Heizung",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_HP_DHW_Temp",
+                    "caption": "Temperatur Brauchwasser (°C)",
+                    "validVariableTypes": [ 1, 2 ]
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "💰 Tibber & Tarif",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "TIBBER_Active",
+                    "caption": "Tibber Preisoptimierung aktivieren"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Tibber Variablen ─────────────────────"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_Price",
+                    "caption": "Aktueller Strompreis (ct/kWh)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_Level",
+                    "caption": "Aktuelles Preisniveau (act_level)",
+                    "validVariableTypes": [ 1 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_Feed_Tariff",
+                    "caption": "Einspeisevergütung (ct/kWh)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_PT15M_Today",
+                    "caption": "15-Min-Preise Heute JSON (PT15M_T0)",
+                    "validVariableTypes": [ 3 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_PT15M_Tomorrow",
+                    "caption": "15-Min-Preise Morgen JSON (PT15M_T1)",
+                    "validVariableTypes": [ 3 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_PT60M_Today",
+                    "caption": "Stundenpreise Heute JSON (PT60M_T0)",
+                    "validVariableTypes": [ 3 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_TIB_Ahead_15M",
+                    "caption": "Preisvorschau 15-Min Energie-Optimierer",
+                    "validVariableTypes": [ 3 ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Preisschwellen ──────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "TIB_Threshold_Charge",
+                    "caption": "Preisschwelle Netz→Batterie laden (ct/kWh)",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "digits": 2,
+                    "suffix": " ct"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "TIB_Threshold_Discharge",
+                    "caption": "Preisschwelle Batterie→Haus entladen (ct/kWh)",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "digits": 2,
+                    "suffix": " ct"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "TIB_Threshold_WB",
+                    "caption": "Preisschwelle Fahrzeugladung (ct/kWh)",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "digits": 2,
+                    "suffix": " ct"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "TIB_Threshold_Export",
+                    "caption": "Preisschwelle Export ins Netz (ct/kWh)",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "digits": 2,
+                    "suffix": " ct"
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "⚖️ §14a EnWG — Netzentgelt-Zeitfenster",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "ENWG14A_Active",
+                    "caption": "§14a EnWG Modul 1+3 aktivieren"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "ENWG14A_Provider",
+                    "caption": "Netzbetreiber (Dokumentation)",
+                    "validate": ""
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ENWG14A_Start_Hour",
+                    "caption": "Zeitfenster Start (Stunde)",
+                    "minimum": 0,
+                    "maximum": 23,
+                    "suffix": " Uhr"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ENWG14A_End_Hour",
+                    "caption": "Zeitfenster Ende (Stunde)",
+                    "minimum": 1,
+                    "maximum": 24,
+                    "suffix": " Uhr"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ENWG14A_Reduction_Pct",
+                    "caption": "Netzentgelt-Reduktion (%)",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "suffix": " %"
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "☀️ PV Forecast",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "FORECAST_Active",
+                    "caption": "PV Forecast aktivieren"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_FC_Today",
+                    "caption": "Vorhersage Heute (kWh)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_FC_Tomorrow",
+                    "caption": "Vorhersage Morgen (kWh)",
+                    "validVariableTypes": [ 2 ]
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "VAR_FC_JSON",
+                    "caption": "PVForecast JSON (stündliche Auflösung)",
+                    "validVariableTypes": [ 3 ]
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "FORECAST_Min_Power_W",
+                    "caption": "Mindest-PV für Eigenverbrauchsmodus (W)",
+                    "minimum": 100,
+                    "maximum": 10000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "FORECAST_Confidence",
+                    "caption": "Forecast-Konfidenz Mindestgrenze (%)",
+                    "minimum": 10,
+                    "maximum": 100,
+                    "suffix": " %"
+                }
+            ]
+        },
+
+        {
+            "type": "ExpansionPanel",
+            "caption": "⚙️ Optimierungsparameter",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "── Gewichtung ──────────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "OPT_Weight_Selfuse",
+                    "caption": "Gewichtung Eigenverbrauch (0–100%)",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "suffix": " %"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Hysterese ───────────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "OPT_Hysteresis_SOC",
+                    "caption": "SOC-Hysterese Schaltschwelle (%)",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "suffix": " %"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "OPT_Hysteresis_Power",
+                    "caption": "Leistungs-Hysterese (W)",
+                    "minimum": 50,
+                    "maximum": 2000,
+                    "suffix": " W"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "OPT_Hysteresis_Price",
+                    "caption": "Preis-Hysterese (ct/kWh)",
+                    "minimum": 0,
+                    "maximum": 5,
+                    "digits": 2,
+                    "suffix": " ct"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── Timing ──────────────────────────────"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "OPT_Cooldown_Sec",
+                    "caption": "Globaler Cooldown zwischen Entscheidungen (s)",
+                    "minimum": 10,
+                    "maximum": 300,
+                    "suffix": " s"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "OPT_Planning_Horizon_H",
+                    "caption": "Planungshorizont Tibber-Vorschau (Stunden)",
+                    "minimum": 1,
+                    "maximum": 48,
+                    "suffix": " h"
+                }
+            ]
+        }
+
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "EMS jetzt ausführen (manuell)",
+            "onClick": "EMS_Update($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Status anzeigen",
+            "onClick": "echo EMS_GetStatus($id);"
+        }
+    ]
+}
