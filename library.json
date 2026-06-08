@@ -2,9 +2,9 @@
     "id": "{90286A25-E6C9-4A66-BD4E-0CFB707C2C6C}",
     "name": "EMS",
     "author": "DG65",
-    "url": "",
+    "url": "https://github.com/DG65/EMS",
     "compatibility": {
-        "version": "7.1"
+        "version": "9.0"
     },
     "version": "0.1",
     "build": 1,
