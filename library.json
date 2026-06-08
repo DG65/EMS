@@ -2,6 +2,9 @@
     "id": "{90286A25-E6C9-4A66-BD4E-0CFB707C2C6C}",
     "author": "DG65",
     "name": "EMS",
+    "compatibility": {
+    "version": "8.0"
+    },
     "version": "0.1",
     "build": 1,
     "date": 1749340800,
