@@ -1,10 +1,26 @@
 {
-  "id": "{B2F68530-D9F6-4F31-BC5F-3C365412AACF}",
-  "name": "Energy Management System",
-  "type": 3,
-  "vendor": "DG Energy",
-  "aliases": [ "EMS" ],
-  "parentRequirements": [],
-  "childRequirements": [],
-  "implemented": []
+    "id": "{31C61A7B-28C4-4F97-9651-1A64B3469E3C}",
+    "name": "EMS",
+    "type": 3,
+    "vendor": "Community",
+    "aliases": [
+        "Energy Management System"
+    ],
+    "parent": [],
+    "child": [],
+    "implemented": [
+        "Create",
+        "Destroy",
+        "ApplyChanges",
+        "GetConfigurationForm",
+        "RequestAction",
+        "Update"
+    ],
+    "prefix": "EMS",
+    "version": "0.1",
+    "compatibility": ">=7.0",
+    "description": {
+        "de": "Energy Management System für Goodwe Wechselrichter, Batteriespeicher, PV, Wallboxen, Wärmepumpe und Tibber Stromtarif.",
+        "en": "Energy Management System for Goodwe inverters, battery storage, PV, wallboxes, heat pumps and Tibber energy tariff."
+    }
 }
