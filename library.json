@@ -4,5 +4,13 @@
   "name": "EMS",
   "version": "0.1",
   "build": 1,
-  "date": 20260607
+  "date": "2026-06-07",
+  "description": "Energy Management System für IP-Symcon. Unterstützt Goodwe Wechselrichter mit Batteriespeicher, PV-Generator, Wallboxen (go-e Charger), Wärmepumpen (Heishamon/Panasonic Aquarea) sowie Tibber Stromtarif mit dynamischer Preisoptimierung.",
+  "compatibility": {
+    "version": "9.0",
+    "date": 1704067200
+  },
+  "modules": [
+    "{31C61A7B-28C4-4F97-9651-1A64B3469E3C}"
+  ]
 }
