@@ -6,24 +6,8 @@
     "aliases": [
         "Energy Management System"
     ],
-    "parent": [],
-    "child": [],
-    "implemented": [
-        "Create",
-        "Destroy",
-        "ApplyChanges",
-        "GetConfigurationForm",
-        "RequestAction",
-        "Update"
-    ],
-    "prefix": "EMS",
-    "version": "0.1",
-    "compatibility": {
-        "version": "9.0",
-        "date": 1704067200
-    },
-    "description": {
-        "de": "Energy Management System für Goodwe Wechselrichter, Batteriespeicher, PV, Wallboxen, Wärmepumpe und Tibber Stromtarif.",
-        "en": "Energy Management System for Goodwe inverters, battery storage, PV, wallboxes, heat pumps and Tibber energy tariff."
-    }
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "EMS"
 }
