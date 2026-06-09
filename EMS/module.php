@@ -25,13 +25,14 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('VAR_WR_EMS_Mode', 0);
         $this->RegisterPropertyInteger('VAR_WR_EMS_Power', 0);
 
-        $this->RegisterVariableInteger('EMS_Mode', 'Mode');
+        $this->RegisterVariableInteger('EMS_Mode', 'Modus');
         $this->RegisterVariableString('EMS_Status', 'Status');
 
         $this->RegisterVariableBoolean('EMS_GridRewards', 'Grid Rewards');
         $this->EnableAction('EMS_GridRewards');
 
-        $this->RegisterTimer('Update', 0, 'EMS_RequestAction($_IPS["TARGET"], "Update", 0);');
+        // ✅ KORREKTER TIMER
+        $this->RegisterTimer('UpdateTimer', 0, 'IPS_RequestAction($_IPS["TARGET"], "Update", 0);');
     }
 
     public function ApplyChanges(): void
@@ -39,19 +40,24 @@ class EMS extends IPSModule
         parent::ApplyChanges();
 
         if ($this->ReadPropertyBoolean('EMS_Active')) {
-            $this->SetTimerInterval('Update', $this->ReadPropertyInteger('EMS_Interval') * 1000);
+            $this->SetTimerInterval('UpdateTimer', $this->ReadPropertyInteger('EMS_Interval') * 1000);
         } else {
-            $this->SetTimerInterval('Update', 0);
+            $this->SetTimerInterval('UpdateTimer', 0);
         }
     }
 
     public function RequestAction($ident, $value)
     {
-        if ($ident === 'Update') {
-            $this->Update();
-        }
-        if ($ident === 'EMS_GridRewards') {
-            $this->SetValue('EMS_GridRewards', $value);
+        try {
+            if ($ident === 'Update') {
+                $this->Update();
+            }
+
+            if ($ident === 'EMS_GridRewards') {
+                $this->SetValue('EMS_GridRewards', $value);
+            }
+        } catch (Throwable $e) {
+            $this->SendDebug('ERROR', $e->getMessage(), 0);
         }
     }
 
@@ -59,28 +65,33 @@ class EMS extends IPSModule
     {
         if (!$this->ReadPropertyBoolean('EMS_Active')) return;
 
-        $state = [
-            'grid' => $this->readVar('VAR_SM_Total_Power'),
-            'pv' => $this->readVar('VAR_PV_Total_Power'),
-            'soc' => $this->readVar('VAR_BAT1_SOC'),
-            'price' => $this->readVar('VAR_TIB_Price'),
-            'wb' => ($this->readVar('VAR_WB1_Power') + $this->readVar('VAR_WB2_Power')) * 1000,
-            'grid_rewards' => $this->GetValue('EMS_GridRewards')
-        ];
+        try {
+            $state = [
+                'grid' => $this->readVar('VAR_SM_Total_Power'),
+                'pv' => $this->readVar('VAR_PV_Total_Power'),
+                'soc' => $this->readVar('VAR_BAT1_SOC'),
+                'price' => $this->readVar('VAR_TIB_Price'),
+                'wb' => ($this->readVar('VAR_WB1_Power') + $this->readVar('VAR_WB2_Power')) * 1000,
+                'grid_rewards' => $this->GetValue('EMS_GridRewards')
+            ];
 
-        $this->SendDebug('STATE', json_encode($state), 0);
+            $this->SendDebug('STATE', json_encode($state), 0);
 
-        if ($state['grid_rewards']) {
-            $this->setGoodweMode(self::MODE_AUTO, $state['wb']);
-            $this->SetValue('EMS_Status', "Grid Rewards aktiv");
-            return;
+            if ($state['grid_rewards']) {
+                $this->setGoodweMode(self::MODE_AUTO, (int)$state['wb']);
+                $this->SetValue('EMS_Status', "Grid Rewards aktiv");
+                return;
+            }
+
+            $result = $this->optimize($state);
+
+            $this->setGoodweMode($result['mode'], $result['power']);
+            $this->SetValue('EMS_Mode', $result['mode']);
+            $this->SetValue('EMS_Status', json_encode($result));
+
+        } catch (Throwable $e) {
+            $this->SendDebug('ERROR', $e->getMessage(), 0);
         }
-
-        $result = $this->optimize($state);
-
-        $this->setGoodweMode($result['mode'], $result['power']);
-        $this->SetValue('EMS_Mode', $result['mode']);
-        $this->SetValue('EMS_Status', "Optimiert");
     }
 
     private function optimize(array $s): array
