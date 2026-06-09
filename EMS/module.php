@@ -341,10 +341,10 @@ class EMS extends IPSModule
         $varPower = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Power');
         $varWeek  = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Week');
 
-        if ($varStart > 0) { SetValue($varStart, $startVal); }
-        if ($varEnd   > 0) { SetValue($varEnd,   $endVal);   }
-        if ($varPower > 0) { SetValue($varPower,  $powerPct); }
-        if ($varWeek  > 0) { SetValue($varWeek,   $weekMask); }
+        if ($varStart > 0) { $this->writeVar($varStart, $startVal); }
+        if ($varEnd   > 0) { $this->writeVar($varEnd,   $endVal);   }
+        if ($varPower > 0) { $this->writeVar($varPower,  $powerPct); }
+        if ($varWeek  > 0) { $this->writeVar($varWeek,   $weekMask); }
 
         $this->emsLog(EMS_LOG_BASIC, sprintf(
             'ECO Slot %d: %02d:%02d-%02d:%02d %d%% Woche=0x%04X',
@@ -748,7 +748,7 @@ class EMS extends IPSModule
         if ($d['gw_power_w'] > 0) {
             $varPower = $this->ReadPropertyInteger('VAR_WR_EMS_Power');
             if ($varPower > 0) {
-                SetValue($varPower, $d['gw_power_w']);
+                $this->writeVar($varPower, $d['gw_power_w']);
             }
         }
 
@@ -769,8 +769,8 @@ class EMS extends IPSModule
     {
         $varMode  = $this->ReadPropertyInteger('VAR_WR_EMS_Mode');
         $varPower = $this->ReadPropertyInteger('VAR_WR_EMS_Power');
-        if ($varMode  > 0) { SetValue($varMode,  $mode);   }
-        if ($varPower > 0 && $powerW > 0) { SetValue($varPower, $powerW); }
+        if ($varMode  > 0) { $this->writeVar($varMode,  $mode);   }
+        if ($varPower > 0 && $powerW > 0) { $this->writeVar($varPower, $powerW); }
     }
 
     private function controlWallbox($num, $enable)
@@ -838,6 +838,28 @@ class EMS extends IPSModule
             return $default;
         }
         return GetValue($varId);
+    }
+
+    /**
+     * Schreibt einen Wert auf eine externe IPS-Variable.
+     * Verwendet RequestAction() fuer read-only Variablen (Modbus, etc.)
+     * und SetValue() als Fallback fuer beschreibbare Variablen.
+     */
+    private function writeVar($varId, $value)
+    {
+        if ($varId <= 0) { return; }
+        if (!IPS_VariableExists($varId)) {
+            $this->emsLog(EMS_LOG_VERBOSE, 'writeVar: Variable ID ' . $varId . ' existiert nicht');
+            return;
+        }
+        $varInfo = IPS_GetVariable($varId);
+        if ($varInfo['VariableAction'] > 0) {
+            // Variable hat eine Aktion — RequestAction verwenden
+            RequestAction($varId, $value);
+        } else {
+            // Keine Aktion definiert — direkt schreiben
+            SetValue($varId, $value);
+        }
     }
 
     private function isInEnwgWindow()
