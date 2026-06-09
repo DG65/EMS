@@ -394,8 +394,8 @@ class EMS extends IPSModule
         // Wechselrichter
         $s['wr_total_w']     = (float)$this->readVar('VAR_WR_Total_Power',   0);
         $s['wr_temp']        = (float)$this->readVar('VAR_WR_Temp',          25);
-        $s['backup_active']  = ((int)$this->readVar('VAR_WR_Backup_Active',  0) === 1);
-        $s['backup_power_w'] = (float)$this->readVar('VAR_WR_Backup_Power',  0);
+        // Netzausfall-Erkennung entfernt - der Goodwe WR erkennt und behandelt
+        // Netzausfälle selbständig. Das EMS muss das nicht doppelt überwachen.
 
         // Batterie
         $s['bat_active']     = $this->ReadPropertyBoolean('BAT_Active');
@@ -515,14 +515,6 @@ class EMS extends IPSModule
     {
         $p = array('triggered' => false, 'reason' => '', 'action' => '');
 
-        // Backup / Netzausfall
-        if ($s['backup_active']) {
-            $p['triggered'] = true;
-            $p['reason']    = 'Backup aktiv - Netzausfall erkannt';
-            $p['action']    = 'backup';
-            return $p;
-        }
-
         // SLS-Schutz phasengenau
         $slsLimit  = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_A');
         $threshold = $slsLimit * 0.95;
@@ -588,11 +580,7 @@ class EMS extends IPSModule
         $this->SetValue('EMS_Status',     'SCHUTZ: ' . $p['reason']);
         $this->SetValue('EMS_LastAction', 'SCHUTZ: ' . $p['reason']);
 
-        if ($p['action'] === 'backup') {
-            $this->setGoodweMode(GW_MODE_ISLAND, 0);
-            $this->setAllWallboxes(false);
-            $this->SetValue('EMS_Mode', EMS_OP_BACKUP);
-        } elseif ($p['action'] === 'sls') {
+        if ($p['action'] === 'sls') {
             $this->setAllWallboxes(false);
             $this->setGoodweMode(GW_MODE_STANDBY, 0);
             $this->SetValue('EMS_Mode', EMS_OP_STANDBY);
