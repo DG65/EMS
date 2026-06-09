@@ -31,7 +31,6 @@ class EMS extends IPSModule
         $this->RegisterVariableBoolean('EMS_GridRewards', 'Grid Rewards');
         $this->EnableAction('EMS_GridRewards');
 
-        // ✅ KORREKTER TIMER
         $this->RegisterTimer('UpdateTimer', 0, 'IPS_RequestAction($_IPS["TARGET"], "Update", 0);');
     }
 
@@ -51,10 +50,12 @@ class EMS extends IPSModule
         try {
             if ($ident === 'Update') {
                 $this->Update();
+                return;
             }
 
             if ($ident === 'EMS_GridRewards') {
                 $this->SetValue('EMS_GridRewards', $value);
+                return;
             }
         } catch (Throwable $e) {
             $this->SendDebug('ERROR', $e->getMessage(), 0);
@@ -79,7 +80,7 @@ class EMS extends IPSModule
 
             if ($state['grid_rewards']) {
                 $this->setGoodweMode(self::MODE_AUTO, (int)$state['wb']);
-                $this->SetValue('EMS_Status', "Grid Rewards aktiv");
+                $this->SetValue('EMS_Status', 'GridRewards');
                 return;
             }
 
@@ -144,5 +145,4 @@ class EMS extends IPSModule
         return ($id>0 && IPS_VariableExists($id)) ? GetValue($id) : 0;
     }
 }
-
 ?>
