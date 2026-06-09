@@ -150,42 +150,50 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Power",
-                    "caption": "PAC2200 Wirkleistung L1 (W)"
+                    "caption": "PAC2200 Wirkleistung L1 (W)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Power",
-                    "caption": "PAC2200 Wirkleistung L2 (W)"
+                    "caption": "PAC2200 Wirkleistung L2 (W)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Power",
-                    "caption": "PAC2200 Wirkleistung L3 (W)"
+                    "caption": "PAC2200 Wirkleistung L3 (W)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Current",
-                    "caption": "PAC2200 Strom L1 (A)"
+                    "caption": "PAC2200 Strom L1 (A)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Current",
-                    "caption": "PAC2200 Strom L2 (A)"
+                    "caption": "PAC2200 Strom L2 (A)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Current",
-                    "caption": "PAC2200 Strom L3 (A)"
+                    "caption": "PAC2200 Strom L3 (A)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Import",
-                    "caption": "PAC2200 Wirkarbeit Bezug (Wh)"
+                    "caption": "PAC2200 Wirkarbeit Bezug (Wh)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Export",
-                    "caption": "PAC2200 Wirkarbeit Abgabe (Wh)"
+                    "caption": "PAC2200 Wirkarbeit Abgabe (Wh)",
+                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
                 }
             ]
         },

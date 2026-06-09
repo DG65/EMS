@@ -352,14 +352,230 @@ class EMS extends IPSModule
         ));
     }
 
+    /**
+     * Nacht-Ladefenster planen.
+     * Ohne Tibber: volles §14a-Fenster.
+     * Mit Tibber PT15M: guenstigstes konsekutives Fenster berechnen,
+     * das gerade lang genug ist um den fehlenden SOC zu laden.
+     */
     public function PlanNightCharge()
     {
         $startH = $this->ReadPropertyInteger('ENWG14A_Start_Hour');
         $endH   = $this->ReadPropertyInteger('ENWG14A_End_Hour');
-        $this->SetECOWindow(1, $startH, 0, $endH, 0, 100, 65407);
+
+        if (!$this->ReadPropertyBoolean('TIBBER_Active')
+            || !$this->ReadPropertyBoolean('BAT_Active')) {
+            $this->SetECOWindow(1, $startH, 0, $endH, 0, 100, 65407);
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'Nacht-Ladefenster: %02d:00-%02d:00 Uhr (Slot 1, kein Tibber/Bat)', $startH, $endH
+            ));
+            return;
+        }
+
+        // Fehlenden SOC ermitteln
+        $soc = (float)$this->readVar('VAR_BAT1_SOC', 0);
+        if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
+            $soc = ($soc + (float)$this->readVar('VAR_BAT2_SOC', 0)) / 2.0;
+        }
+        $target    = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
+        $capKwh    = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
+        $slsW      = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_W');
+
+        // Ladedauer abschaetzen: Ladegeschwindigkeit = min(SLS, 0.5C)
+        $chargeKw    = min($slsW / 1000.0, $capKwh * 0.5);
+        $neededKwh   = max(0.0, ($target - $soc) / 100.0 * $capKwh);
+        $neededHrs   = ($chargeKw > 0 && $neededKwh > 0) ? ($neededKwh / $chargeKw) : 0.0;
+        $neededSlots = max(1, (int)ceil($neededHrs * 4)); // 15-Min-Slots
+
+        // Guenstigstes Fenster im §14a-Zeitraum suchen
+        $window = $this->getPT15MWindow($startH, $endH);
+
+        if (empty($window)) {
+            // Keine Preisdaten → volles Fenster
+            $this->SetECOWindow(1, $startH, 0, $endH, 0, 100, 65407);
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'PlanNightCharge: Keine PT15M-Daten → volles Fenster %02d:00-%02d:00', $startH, $endH
+            ));
+            return;
+        }
+
+        $best = $this->findCheapestBlock($window, $neededSlots);
+
+        // Slot-Nummer → Uhrzeit
+        $sSlot  = $best['start'] % 96; // Slot innerhalb eines Tages (0-95)
+        $eSlot  = $best['end']   % 96;
+        $sMin   = $sSlot * 15;
+        $eMin   = ($eSlot + 1) * 15;   // Ende ist exklusiv
+        $sH2    = (int)($sMin / 60);
+        $sM2    = $sMin % 60;
+        $eH2    = (int)($eMin / 60);
+        $eM2    = $eMin % 60;
+        if ($eH2 >= 24) { $eH2 = 23; $eM2 = 59; }
+
+        $this->SetECOWindow(1, $sH2, $sM2, $eH2, $eM2, 100, 65407);
         $this->emsLog(EMS_LOG_BASIC, sprintf(
-            'Nacht-Ladefenster: %02d:00-%02d:00 Uhr (Slot 1)', $startH, $endH
+            'PlanNightCharge: %02d:%02d-%02d:%02d (%d x 15min, %.2f kWh noetig, Ø %.4f EUR/kWh)',
+            $sH2, $sM2, $eH2, $eM2, $neededSlots, $neededKwh, $best['avg_price']
         ));
+    }
+
+    // ----------------------------------------------------------------
+    //  Tibber PT15M + PV-Forecast Hilfsmethoden
+    // ----------------------------------------------------------------
+
+    /**
+     * Gibt ein assoziatives Array [ absoluterSlot => preis ] fuer das
+     * §14a-Fenster zurueck. Slots 0-95 = heute, 96-191 = morgen.
+     * Ist das Fenster heute schon vorbei, wird das morgige Fenster genutzt.
+     */
+    private function getPT15MWindow($startH, $endH)
+    {
+        $varToday    = $this->ReadPropertyInteger('VAR_TIB_PT15M_Today');
+        $varTomorrow = $this->ReadPropertyInteger('VAR_TIB_PT15M_Tomorrow');
+
+        $todayJson    = ($varToday    > 0 && IPS_VariableExists($varToday))    ? GetValue($varToday)    : '';
+        $tomorrowJson = ($varTomorrow > 0 && IPS_VariableExists($varTomorrow)) ? GetValue($varTomorrow) : '';
+
+        $todayPrices    = $this->parsePT15M($todayJson);
+        $tomorrowPrices = $this->parsePT15M($tomorrowJson);
+        $allPrices      = array_merge($todayPrices, $tomorrowPrices); // Index 0-191
+
+        // Liegt das Fenster noch heute oder schon morgen?
+        $hour       = (int)date('G');
+        $baseOffset = ($hour >= $endH) ? 96 : 0;
+
+        $startSlot  = $baseOffset + $startH * 4;
+        $endSlot    = $baseOffset + $endH   * 4 - 1;
+
+        $window = array();
+        for ($slot = $startSlot; $slot <= $endSlot; $slot++) {
+            if (isset($allPrices[$slot])) {
+                $window[$slot] = (float)$allPrices[$slot];
+            }
+        }
+        return $window;
+    }
+
+    /**
+     * PT15M-JSON zu einem Array mit genau 96 Preiseintraegen (Index 0-95) parsen.
+     * Unterstuetzt:
+     *  - Einfaches Zahlen-Array: [0.2345, 0.2234, ...]
+     *  - TibberV2-Objekt-Array:  [{"total":0.2345,"startsAt":"2024-01-01T00:00:00+01:00",...},...]
+     */
+    private function parsePT15M($json)
+    {
+        $prices = array_fill(0, 96, 0.0);
+        if (empty($json)) { return $prices; }
+
+        $data = json_decode($json, true);
+        if (!is_array($data) || empty($data)) { return $prices; }
+
+        // Format: einfaches Float-Array
+        if (isset($data[0]) && is_numeric($data[0])) {
+            for ($i = 0; $i < min(96, count($data)); $i++) {
+                $prices[$i] = (float)$data[$i];
+            }
+            return $prices;
+        }
+
+        // Format: Objekt-Array mit "total" + "startsAt"
+        foreach ($data as $i => $entry) {
+            if (!is_array($entry)) { continue; }
+            $price = 0.0;
+            if (isset($entry['total']))  { $price = (float)$entry['total']; }
+            elseif (isset($entry['price'])) { $price = (float)$entry['price']; }
+
+            if (isset($entry['startsAt'])) {
+                $ts   = strtotime($entry['startsAt']);
+                $slot = (int)floor(((int)date('H', $ts) * 60 + (int)date('i', $ts)) / 15);
+                if ($slot >= 0 && $slot < 96) {
+                    $prices[$slot] = $price;
+                }
+            } elseif ($i >= 0 && $i < 96) {
+                $prices[$i] = $price;
+            }
+        }
+        return $prices;
+    }
+
+    /**
+     * Findet den kostenguenstigsten konsekutiven Block von $neededSlots
+     * Eintraegen im uebergebenen $window-Array.
+     * Gibt array('start', 'end', 'avg_price') zurueck.
+     */
+    private function findCheapestBlock($window, $neededSlots)
+    {
+        $keys  = array_keys($window);
+        $count = count($keys);
+
+        if ($neededSlots >= $count) {
+            $total = array_sum($window);
+            return array(
+                'start'     => $keys[0],
+                'end'       => $keys[$count - 1],
+                'avg_price' => $count > 0 ? $total / $count : 0.0,
+            );
+        }
+
+        $bestSum   = PHP_INT_MAX;
+        $bestStart = $keys[0];
+        $bestEnd   = $keys[$neededSlots - 1];
+
+        for ($i = 0; $i <= $count - $neededSlots; $i++) {
+            $sum = 0.0;
+            for ($j = $i; $j < $i + $neededSlots; $j++) {
+                $sum += $window[$keys[$j]];
+            }
+            if ($sum < $bestSum) {
+                $bestSum   = $sum;
+                $bestStart = $keys[$i];
+                $bestEnd   = $keys[$i + $neededSlots - 1];
+            }
+        }
+
+        return array(
+            'start'     => $bestStart,
+            'end'       => $bestEnd,
+            'avg_price' => $neededSlots > 0 ? $bestSum / $neededSlots : 0.0,
+        );
+    }
+
+    /**
+     * Liest den PV-Forecast-JSON aus VAR_FC_JSON und summiert die
+     * pv_estimate-Werte der naechsten $hours Stunden ab jetzt.
+     * JSON-Format (open-meteo iconD2):
+     *   [{"ts":1234567890,"hour":10,"pv_estimate":2.5,"temp":15,...},...]
+     */
+    private function parseForecastNextHours($hours)
+    {
+        $varId = $this->ReadPropertyInteger('VAR_FC_JSON');
+        if ($varId <= 0 || !IPS_VariableExists($varId)) { return 0.0; }
+
+        $json = GetValue($varId);
+        if (empty($json)) { return 0.0; }
+
+        $data = json_decode($json, true);
+        if (!is_array($data)) { return 0.0; }
+
+        $now    = time();
+        $cutoff = $now + $hours * 3600;
+        $sum    = 0.0;
+
+        foreach ($data as $entry) {
+            if (!is_array($entry)) { continue; }
+
+            // Zeitstempel ermitteln — "ts" oder "tiso" (ISO-String)
+            $ts = 0;
+            if (isset($entry['ts']))   { $ts = (int)$entry['ts']; }
+            elseif (isset($entry['tiso'])) { $ts = (int)strtotime($entry['tiso']); }
+
+            if ($ts <= 0 || $ts < $now || $ts > $cutoff) { continue; }
+
+            if (isset($entry['pv_estimate'])) {
+                $sum += (float)$entry['pv_estimate'];
+            }
+        }
+        return $sum;
     }
 
     // ----------------------------------------------------------------
@@ -457,6 +673,13 @@ class EMS extends IPSModule
         // PV Forecast
         $s['fc_active']     = $this->ReadPropertyBoolean('FORECAST_Active');
         $s['fc_today_kwh']  = $s['fc_active'] ? (float)$this->readVar('VAR_FC_Today',    0) : 0.0;
+
+        // PV Forecast: stündliche Vorschau für Planungshorizont
+        $s['fc_next_kwh']   = 0.0;
+        if ($s['fc_active']) {
+            $horizonH = $this->ReadPropertyInteger('OPT_Planning_Horizon_H');
+            $s['fc_next_kwh'] = $this->parseForecastNextHours($horizonH);
+        }
 
         // §14a
         $s['enwg_active']   = $this->ReadPropertyBoolean('ENWG14A_Active');
@@ -660,14 +883,28 @@ class EMS extends IPSModule
         }
 
         // ── 2. Tibber guenstig → Netz laden ─────────────────────────
+        // Nur laden wenn kein ausreichender PV-Ertrag in Kuerze erwartet wird.
+        // fc_next_kwh > 80% des fehlenden SOC-Bedarfs → Netzladen ueberspringen.
         if ($s['tib_active'] && $s['bat_active'] && $price < ($thCharge - $hystPrice) && $soc < ($socTargetNight - $hystSoc)) {
-            $d['op_mode']    = EMS_OP_NET_CHARGE;
-            $d['gw_mode']    = GW_MODE_AC_IMPORT;
-            $d['gw_power_w'] = (int)$slsW;
-            $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
-            $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
-            $d['reason']     = sprintf('Tibber guenstig: %.2fct < %.2fct, Netz laden', $price, $thCharge);
-            return $d;
+            $capKwh     = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
+            $missingKwh = max(0, ($socTargetNight - $soc) / 100.0 * $capKwh);
+            $pvCovers   = ($s['fc_active'] && $s['fc_next_kwh'] >= $missingKwh * 0.80);
+            if (!$pvCovers) {
+                $d['op_mode']    = EMS_OP_NET_CHARGE;
+                $d['gw_mode']    = GW_MODE_AC_IMPORT;
+                $d['gw_power_w'] = (int)$slsW;
+                $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
+                $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
+                $d['reason']     = sprintf(
+                    'Tibber guenstig: %.2fct < %.2fct, Netz laden (PV-Vorschau %.1f kWh < Bedarf %.1f kWh)',
+                    $price, $thCharge, $s['fc_next_kwh'], $missingKwh
+                );
+                return $d;
+            }
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'Tibber guenstig, aber PV-Vorschau %.1f kWh deckt Bedarf %.1f kWh → kein Netzladen',
+                $s['fc_next_kwh'], $missingKwh
+            ));
         }
 
         // ── 3. PV-Ueberschuss → Eigenverbrauch ──────────────────────
