@@ -52,7 +52,7 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('EMS_Interval',         30);
         $this->RegisterPropertyInteger('EMS_SLS_Limit_A',      50);
         $this->RegisterPropertyInteger('EMS_HAK_Limit_A',      63);
-        $this->RegisterPropertyInteger('EMS_SLS_Limit_W',      34500);
+        $this->RegisterPropertyInteger('EMS_SLS_Limit_W',      34641);
         $this->RegisterPropertyInteger('EMS_Fallback_Mode',    GW_MODE_AUTO);
         $this->RegisterPropertyInteger('EMS_Fallback_Timeout', 60);
         $this->RegisterPropertyInteger('EMS_Log_Level',        EMS_LOG_BASIC);
@@ -98,8 +98,6 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('VAR_WR_Temp',          0);
         $this->RegisterPropertyInteger('VAR_WR_Temp_Cooler',   0);
         $this->RegisterPropertyInteger('VAR_WR_Diag_Status',   0);
-        $this->RegisterPropertyInteger('VAR_WR_Backup_Power',  0);
-        $this->RegisterPropertyInteger('VAR_WR_Backup_Active', 0);
         $this->RegisterPropertyInteger('EMS_WR_Temp_Max',      75);
 
         // ── Batteriespeicher ────────────────────────────────────────
@@ -191,19 +189,19 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('OPT_Planning_Horizon_H',   24);
 
         // ── Statusvariablen ─────────────────────────────────────────
-        $this->RegisterVariableBoolean('EMS_Active_State', 'EMS aktiv',            '', 10);
-        $this->RegisterVariableInteger('EMS_Mode',         'Betriebsmodus',         '', 20);
-        $this->RegisterVariableFloat(  'EMS_GridPower',    'Netzleistung (W)',       '', 30);
-        $this->RegisterVariableFloat(  'EMS_PVPower',      'PV-Leistung (W)',        '', 40);
-        $this->RegisterVariableFloat(  'EMS_BatPower',     'Batterieleistung (W)',   '', 50);
-        $this->RegisterVariableFloat(  'EMS_BatSOC',       'Batterie SOC (%)',       '', 60);
-        $this->RegisterVariableFloat(  'EMS_HousePower',   'Hausverbrauch (W)',      '', 70);
+        $this->RegisterVariableBoolean('EMS_Active_State', 'EMS aktiv',             '', 10);
+        $this->RegisterVariableInteger('EMS_Mode',         'Betriebsmodus',          '', 20);
+        $this->RegisterVariableFloat(  'EMS_GridPower',    'Netzleistung (W)',        '', 30);
+        $this->RegisterVariableFloat(  'EMS_PVPower',      'PV-Leistung (W)',         '', 40);
+        $this->RegisterVariableFloat(  'EMS_BatPower',     'Batterieleistung (W)',    '', 50);
+        $this->RegisterVariableFloat(  'EMS_BatSOC',       'Batterie SOC (%)',        '', 60);
+        $this->RegisterVariableFloat(  'EMS_HousePower',   'Hausverbrauch (W)',       '', 70);
         $this->RegisterVariableFloat(  'EMS_WB1Power',     'Wallbox 1 Leistung (W)', '', 80);
         $this->RegisterVariableFloat(  'EMS_WB2Power',     'Wallbox 2 Leistung (W)', '', 90);
-        $this->RegisterVariableFloat(  'EMS_TibberPrice',  'Tibber Preis (ct/kWh)', '',100);
-        $this->RegisterVariableBoolean('EMS_GridRewards',  'Grid Rewards aktiv',    '',110);
-        $this->RegisterVariableString( 'EMS_LastAction',   'Letzte Aktion',         '',120);
-        $this->RegisterVariableString( 'EMS_Status',       'Status',                '',130);
+        $this->RegisterVariableFloat(  'EMS_TibberPrice',  'Tibber Preis (ct/kWh)',  '',100);
+        $this->RegisterVariableBoolean('EMS_GridRewards',  'Grid Rewards aktiv',     '',110);
+        $this->RegisterVariableString( 'EMS_LastAction',   'Letzte Aktion',          '',120);
+        $this->RegisterVariableString( 'EMS_Status',       'Status',                 '',130);
 
         $this->EnableAction('EMS_GridRewards');
 
@@ -227,13 +225,22 @@ class EMS extends IPSModule
     {
         parent::ApplyChanges();
 
+        // SLS-Grenze in Watt automatisch berechnen: A x 400V x sqrt(3)
+        $slsA  = $this->ReadPropertyInteger('EMS_SLS_Limit_A');
+        $slsW  = (int)round($slsA * 400 * 1.7321);
+        if ($this->ReadPropertyInteger('EMS_SLS_Limit_W') !== $slsW) {
+            IPS_SetProperty($this->InstanceID, 'EMS_SLS_Limit_W', $slsW);
+            IPS_ApplyChanges($this->InstanceID);
+            return;
+        }
+
         $active   = $this->ReadPropertyBoolean('EMS_Active');
         $interval = $this->ReadPropertyInteger('EMS_Interval');
 
         if ($active) {
             $this->SetTimerInterval('EMS_UpdateTimer', $interval * 1000);
             $this->SetStatus(102);
-            $this->emsLog(EMS_LOG_BASIC, 'EMS gestartet, Intervall: ' . $interval . ' s');
+            $this->emsLog(EMS_LOG_BASIC, 'EMS gestartet, Intervall: ' . $interval . 's');
         } else {
             $this->SetTimerInterval('EMS_UpdateTimer', 0);
             $this->SetStatus(104);
@@ -244,7 +251,7 @@ class EMS extends IPSModule
     }
 
     // ----------------------------------------------------------------
-    //  Öffentliche Funktionen
+    //  Oeffentliche Funktionen
     // ----------------------------------------------------------------
 
     public function Update()
@@ -270,10 +277,9 @@ class EMS extends IPSModule
             $this->SetStatus(102);
 
         } catch (Exception $e) {
-            $errors = $this->ReadAttributeInteger('ConsecutiveErrors') + 1;
+            $errors    = $this->ReadAttributeInteger('ConsecutiveErrors') + 1;
             $this->WriteAttributeInteger('ConsecutiveErrors', $errors);
             $this->emsLog(EMS_LOG_BASIC, 'Fehler: ' . $e->getMessage() . ' (#' . $errors . ')');
-
             $timeout   = $this->ReadPropertyInteger('EMS_Fallback_Timeout');
             $interval  = $this->ReadPropertyInteger('EMS_Interval');
             $threshold = max(1, (int)($timeout / max(1, $interval)));
@@ -295,10 +301,8 @@ class EMS extends IPSModule
             EMS_OP_BACKUP      => 'Notbetrieb',
             EMS_OP_GRIDREWARDS => 'Grid Rewards',
         );
-
         $mode     = $this->GetValue('EMS_Mode');
         $modeName = isset($modeNames[$mode]) ? $modeNames[$mode] : 'Unbekannt';
-
         return sprintf(
             'Modus: %s | SOC: %.0f%% | Netz: %.0f W | PV: %.0f W | Tibber: %.2f ct | Aktion: %s',
             $modeName,
@@ -322,9 +326,9 @@ class EMS extends IPSModule
     /**
      * Goodwe ECO-Zeitfenster setzen
      * Zeitformat: High Byte = Stunden (0-23), Low Byte = Minuten (0-59)
-     * Beispiel: 02:30 → (2 << 8) | 30 = 542
+     * Beispiel: 02:30 -> (2 << 8) | 30 = 542
      * Work Week: High Byte 0xFF = enable, Low Byte Bits 0-6 = So-Sa
-     * Ganze Woche: 0xFF7F = 65407
+     * Ganze Woche aktiv: 0xFF7F = 65407
      */
     public function SetECOWindow($slot, $startHour, $startMin, $endHour, $endMin, $powerPct, $weekMask = 65407)
     {
@@ -332,20 +336,16 @@ class EMS extends IPSModule
             $this->emsLog(EMS_LOG_BASIC, 'SetECOWindow: Slot muss 1-4 sein');
             return;
         }
-
         $startVal = ($startHour << 8) | $startMin;
         $endVal   = ($endHour   << 8) | $endMin;
-
         $varStart = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Start');
         $varEnd   = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_End');
         $varPower = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Power');
         $varWeek  = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Week');
-
         if ($varStart > 0) { $this->writeVar($varStart, $startVal); }
         if ($varEnd   > 0) { $this->writeVar($varEnd,   $endVal);   }
         if ($varPower > 0) { $this->writeVar($varPower,  $powerPct); }
         if ($varWeek  > 0) { $this->writeVar($varWeek,   $weekMask); }
-
         $this->emsLog(EMS_LOG_BASIC, sprintf(
             'ECO Slot %d: %02d:%02d-%02d:%02d %d%% Woche=0x%04X',
             $slot, $startHour, $startMin, $endHour, $endMin, $powerPct, $weekMask
@@ -357,7 +357,9 @@ class EMS extends IPSModule
         $startH = $this->ReadPropertyInteger('ENWG14A_Start_Hour');
         $endH   = $this->ReadPropertyInteger('ENWG14A_End_Hour');
         $this->SetECOWindow(1, $startH, 0, $endH, 0, 100, 65407);
-        $this->emsLog(EMS_LOG_BASIC, sprintf('Nacht-Ladefenster: %02d:00-%02d:00 Uhr (Slot 1)', $startH, $endH));
+        $this->emsLog(EMS_LOG_BASIC, sprintf(
+            'Nacht-Ladefenster: %02d:00-%02d:00 Uhr (Slot 1)', $startH, $endH
+        ));
     }
 
     // ----------------------------------------------------------------
@@ -369,60 +371,57 @@ class EMS extends IPSModule
         $s = array();
 
         // Netz (SmartMeter)
-        $s['grid_total_w']   = (float)$this->readVar('VAR_SM_Total_Power', 0);
-        $s['grid_l1_w']      = (float)$this->readVar('VAR_SM_L1_Power',    0);
-        $s['grid_l2_w']      = (float)$this->readVar('VAR_SM_L2_Power',    0);
-        $s['grid_l3_w']      = (float)$this->readVar('VAR_SM_L3_Power',    0);
-        $s['grid_l1_a']      = (float)$this->readVar('VAR_SM_L1_Current',  0);
-        $s['grid_l2_a']      = (float)$this->readVar('VAR_SM_L2_Current',  0);
-        $s['grid_l3_a']      = (float)$this->readVar('VAR_SM_L3_Current',  0);
+        $s['grid_total_w']  = (float)$this->readVar('VAR_SM_Total_Power', 0);
+        $s['grid_l1_w']     = (float)$this->readVar('VAR_SM_L1_Power',    0);
+        $s['grid_l2_w']     = (float)$this->readVar('VAR_SM_L2_Power',    0);
+        $s['grid_l3_w']     = (float)$this->readVar('VAR_SM_L3_Power',    0);
+        $s['grid_l1_a']     = (float)$this->readVar('VAR_SM_L1_Current',  0);
+        $s['grid_l2_a']     = (float)$this->readVar('VAR_SM_L2_Current',  0);
+        $s['grid_l3_a']     = (float)$this->readVar('VAR_SM_L3_Current',  0);
 
         // PAC2200 optional
         if ($this->ReadPropertyBoolean('PAC2200_Active')) {
-            $s['pac_l1_a']   = (float)$this->readVar('VAR_PAC_L1_Current', 0);
-            $s['pac_l2_a']   = (float)$this->readVar('VAR_PAC_L2_Current', 0);
-            $s['pac_l3_a']   = (float)$this->readVar('VAR_PAC_L3_Current', 0);
+            $s['pac_l1_a']  = (float)$this->readVar('VAR_PAC_L1_Current', 0);
+            $s['pac_l2_a']  = (float)$this->readVar('VAR_PAC_L2_Current', 0);
+            $s['pac_l3_a']  = (float)$this->readVar('VAR_PAC_L3_Current', 0);
         } else {
-            $s['pac_l1_a']   = 0.0;
-            $s['pac_l2_a']   = 0.0;
-            $s['pac_l3_a']   = 0.0;
+            $s['pac_l1_a']  = 0.0;
+            $s['pac_l2_a']  = 0.0;
+            $s['pac_l3_a']  = 0.0;
         }
 
         // PV
-        $s['pv_total_w']     = (float)$this->readVar('VAR_PV_Total_Power', 0);
+        $s['pv_total_w']    = (float)$this->readVar('VAR_PV_Total_Power', 0);
 
         // Wechselrichter
-        $s['wr_total_w']     = (float)$this->readVar('VAR_WR_Total_Power',   0);
-        $s['wr_temp']        = (float)$this->readVar('VAR_WR_Temp',          25);
-        // Netzausfall-Erkennung entfernt - der Goodwe WR erkennt und behandelt
-        // Netzausfälle selbständig. Das EMS muss das nicht doppelt überwachen.
+        $s['wr_total_w']    = (float)$this->readVar('VAR_WR_Total_Power', 0);
+        $s['wr_temp']       = (float)$this->readVar('VAR_WR_Temp',        25);
 
         // Batterie
-        $s['bat_active']     = $this->ReadPropertyBoolean('BAT_Active');
+        $s['bat_active']    = $this->ReadPropertyBoolean('BAT_Active');
         if ($s['bat_active']) {
-            $soc1            = (float)$this->readVar('VAR_BAT1_SOC',       0);
-            $pow1            = (float)$this->readVar('VAR_BAT1_Power',     0);
-            $temp1           = (float)$this->readVar('VAR_BAT1_Temp',     25);
-            $cvMax1          = (int)  $this->readVar('VAR_BAT1_Cell_V_Max',3600);
-            $cvMin1          = (int)  $this->readVar('VAR_BAT1_Cell_V_Min',2900);
-
+            $soc1           = (float)$this->readVar('VAR_BAT1_SOC',        0);
+            $pow1           = (float)$this->readVar('VAR_BAT1_Power',      0);
+            $temp1          = (float)$this->readVar('VAR_BAT1_Temp',      25);
+            $cvMax1         = (int)  $this->readVar('VAR_BAT1_Cell_V_Max',3600);
+            $cvMin1         = (int)  $this->readVar('VAR_BAT1_Cell_V_Min',2900);
             if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
-                $soc2        = (float)$this->readVar('VAR_BAT2_SOC',       0);
-                $pow2        = (float)$this->readVar('VAR_BAT2_Power',     0);
-                $temp2       = (float)$this->readVar('VAR_BAT2_Temp',     25);
-                $cvMax2      = (int)  $this->readVar('VAR_BAT2_Cell_V_Max',3600);
-                $cvMin2      = (int)  $this->readVar('VAR_BAT2_Cell_V_Min',2900);
-                $s['bat_soc']   = ($soc1 + $soc2) / 2.0;
-                $s['bat_pow_w'] = $pow1 + $pow2;
-                $s['bat_temp']  = max($temp1, $temp2);
-                $s['bat_cv_max']= max($cvMax1, $cvMax2);
-                $s['bat_cv_min']= min($cvMin1, $cvMin2);
+                $soc2       = (float)$this->readVar('VAR_BAT2_SOC',        0);
+                $pow2       = (float)$this->readVar('VAR_BAT2_Power',      0);
+                $temp2      = (float)$this->readVar('VAR_BAT2_Temp',      25);
+                $cvMax2     = (int)  $this->readVar('VAR_BAT2_Cell_V_Max',3600);
+                $cvMin2     = (int)  $this->readVar('VAR_BAT2_Cell_V_Min',2900);
+                $s['bat_soc']    = ($soc1 + $soc2) / 2.0;
+                $s['bat_pow_w']  = $pow1 + $pow2;
+                $s['bat_temp']   = max($temp1, $temp2);
+                $s['bat_cv_max'] = max($cvMax1, $cvMax2);
+                $s['bat_cv_min'] = min($cvMin1, $cvMin2);
             } else {
-                $s['bat_soc']   = $soc1;
-                $s['bat_pow_w'] = $pow1;
-                $s['bat_temp']  = $temp1;
-                $s['bat_cv_max']= $cvMax1;
-                $s['bat_cv_min']= $cvMin1;
+                $s['bat_soc']    = $soc1;
+                $s['bat_pow_w']  = $pow1;
+                $s['bat_temp']   = $temp1;
+                $s['bat_cv_max'] = $cvMax1;
+                $s['bat_cv_min'] = $cvMin1;
             }
         } else {
             $s['bat_soc']    = 0.0;
@@ -433,59 +432,56 @@ class EMS extends IPSModule
         }
 
         // Wallboxen
-        $s['wb_active']      = $this->ReadPropertyBoolean('WB_Active');
-        $s['wb_count']       = $this->ReadPropertyInteger('WB_Count');
-        $s['grid_rewards']   = $this->GetValue('EMS_GridRewards');
-        $s['wb1_pow_kw']     = (float)$this->readVar('VAR_WB1_Power',  0);
-        $s['wb1_status']     = (int)  $this->readVar('VAR_WB1_Status', 0);
-        $s['wb1_cable']      = (int)  $this->readVar('VAR_WB1_Cable',  0);
-        $s['wb1_error']      = (int)  $this->readVar('VAR_WB1_Error',  0);
-        $s['wb2_pow_kw']     = (float)$this->readVar('VAR_WB2_Power',  0);
-        $s['wb2_status']     = (int)  $this->readVar('VAR_WB2_Status', 0);
-        $s['wb2_cable']      = (int)  $this->readVar('VAR_WB2_Cable',  0);
-        $s['wb2_error']      = (int)  $this->readVar('VAR_WB2_Error',  0);
+        $s['wb_active']     = $this->ReadPropertyBoolean('WB_Active');
+        $s['wb_count']      = $this->ReadPropertyInteger('WB_Count');
+        $s['grid_rewards']  = $this->GetValue('EMS_GridRewards');
+        $s['wb1_pow_kw']    = (float)$this->readVar('VAR_WB1_Power',  0);
+        $s['wb1_status']    = (int)  $this->readVar('VAR_WB1_Status', 0);
+        $s['wb1_cable']     = (int)  $this->readVar('VAR_WB1_Cable',  0);
+        $s['wb1_error']     = (int)  $this->readVar('VAR_WB1_Error',  0);
+        $s['wb2_pow_kw']    = (float)$this->readVar('VAR_WB2_Power',  0);
+        $s['wb2_status']    = (int)  $this->readVar('VAR_WB2_Status', 0);
+        $s['wb2_cable']     = (int)  $this->readVar('VAR_WB2_Cable',  0);
+        $s['wb2_error']     = (int)  $this->readVar('VAR_WB2_Error',  0);
 
-        // Wärmepumpe
-        $s['hp_active']      = $this->ReadPropertyBoolean('HP_Active');
-        $s['hp_pow_w']       = $s['hp_active'] ? (float)$this->readVar('VAR_HP_Power', 0) : 0.0;
+        // Waermepumpe (nur Monitoring)
+        $s['hp_active']     = $this->ReadPropertyBoolean('HP_Active');
+        $s['hp_pow_w']      = $s['hp_active'] ? (float)$this->readVar('VAR_HP_Power', 0) : 0.0;
 
         // Tibber
-        $s['tib_active']     = $this->ReadPropertyBoolean('TIBBER_Active');
-        $s['tib_price']      = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Price',       0)     : 0.0;
-        $s['tib_level']      = $s['tib_active'] ? (int)  $this->readVar('VAR_TIB_Level',       2)     : 2;
-        $s['tib_feed']       = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Feed_Tariff', 18.36) : 18.36;
+        $s['tib_active']    = $this->ReadPropertyBoolean('TIBBER_Active');
+        $s['tib_price']     = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Price',       0)     : 0.0;
+        $s['tib_level']     = $s['tib_active'] ? (int)  $this->readVar('VAR_TIB_Level',       2)     : 2;
+        $s['tib_feed']      = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Feed_Tariff', 18.36) : 18.36;
 
         // PV Forecast
-        $s['fc_active']      = $this->ReadPropertyBoolean('FORECAST_Active');
-        $s['fc_today_kwh']   = $s['fc_active'] ? (float)$this->readVar('VAR_FC_Today',    0) : 0.0;
-        $s['fc_tomorrow_kwh']= $s['fc_active'] ? (float)$this->readVar('VAR_FC_Tomorrow', 0) : 0.0;
+        $s['fc_active']     = $this->ReadPropertyBoolean('FORECAST_Active');
+        $s['fc_today_kwh']  = $s['fc_active'] ? (float)$this->readVar('VAR_FC_Today',    0) : 0.0;
 
         // §14a
-        $s['enwg_active']    = $this->ReadPropertyBoolean('ENWG14A_Active');
-        $s['enwg_in_window'] = ($s['enwg_active'] && $this->isInEnwgWindow());
+        $s['enwg_active']   = $this->ReadPropertyBoolean('ENWG14A_Active');
+        $s['enwg_in_window']= ($s['enwg_active'] && $this->isInEnwgWindow());
 
         // Berechneter Hausverbrauch
-        $s['house_pow_w']    = $s['pv_total_w']
-                               - abs($s['bat_pow_w'])
-                               - $s['grid_total_w']
-                               - ($s['wb1_pow_kw'] * 1000)
-                               - ($s['wb2_pow_kw'] * 1000);
+        $wbW = ($s['wb1_pow_kw'] + $s['wb2_pow_kw']) * 1000;
+        $s['house_pow_w'] = $s['pv_total_w'] - abs($s['bat_pow_w']) - $s['grid_total_w'] - $wbW;
         if ($s['house_pow_w'] < 0) { $s['house_pow_w'] = 0.0; }
 
         // Effektiver Tibber-Preis nach §14a-Reduktion
         if ($s['enwg_in_window'] && $s['tib_active']) {
-            $reduction           = $this->ReadPropertyInteger('ENWG14A_Reduction_Pct') / 100.0;
-            $s['tib_price_eff']  = $s['tib_price'] * (1.0 - $reduction);
+            $reduction          = $this->ReadPropertyInteger('ENWG14A_Reduction_Pct') / 100.0;
+            $s['tib_price_eff'] = $s['tib_price'] * (1.0 - $reduction);
         } else {
-            $s['tib_price_eff']  = $s['tib_price'];
+            $s['tib_price_eff'] = $s['tib_price'];
         }
 
-        $s['timestamp']      = time();
+        $s['timestamp'] = time();
 
         $this->emsLog(EMS_LOG_VERBOSE, sprintf(
-            'State: Grid=%.0fW PV=%.0fW Bat=%.0fW(SOC=%.0f%%) Tibber=%.2f->%.2fct',
-            $s['grid_total_w'], $s['pv_total_w'], $s['bat_pow_w'],
-            $s['bat_soc'], $s['tib_price'], $s['tib_price_eff']
+            'State: Grid=%.0fW PV=%.0fW Bat=%.0fW(SOC=%.0f%%) HP=%.0fW Tibber=%.2f->%.2fct %s',
+            $s['grid_total_w'], $s['pv_total_w'], $s['bat_pow_w'], $s['bat_soc'],
+            $s['hp_pow_w'], $s['tib_price'], $s['tib_price_eff'],
+            $s['enwg_in_window'] ? '[14a aktiv]' : ''
         ));
 
         return $s;
@@ -532,12 +528,12 @@ class EMS extends IPSModule
         $slsWatt = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_W');
         if ($s['grid_total_w'] > $slsWatt * 0.97) {
             $p['triggered'] = true;
-            $p['reason']    = sprintf('SLS-Schutz: Gesamtleistung %.0f W (Grenze %.0f W)', $s['grid_total_w'], $slsWatt);
+            $p['reason']    = sprintf('SLS-Schutz Gesamt: %.0f W (Grenze %.0f W)', $s['grid_total_w'], $slsWatt);
             $p['action']    = 'sls';
             return $p;
         }
 
-        // WR-Überhitzung
+        // WR-Ueberhitzung
         $wrTempMax = (float)$this->ReadPropertyInteger('EMS_WR_Temp_Max');
         if ($s['wr_temp'] > $wrTempMax) {
             $p['triggered'] = true;
@@ -609,14 +605,25 @@ class EMS extends IPSModule
             'reason'     => '',
         );
 
-        // Grid Rewards → Batterie hält SOC, Tibber steuert Wallbox
+        // ── Grid Rewards ─────────────────────────────────────────────
+        // Tibber steuert Wallbox direkt. Batterie darf weder laden noch
+        // entladen. Der Goodwe importiert nur so viel wie die Wallboxen
+        // und der Hausverbrauch benoetigen — keine Batterieladung.
         if ($s['grid_rewards']) {
+            $wbTotalW = (int)round(($s['wb1_pow_kw'] + $s['wb2_pow_kw']) * 1000);
+            $houseW   = (int)round($s['house_pow_w']);
+            // Leistungseinstellung = nur aktueller Verbrauch ohne Batterie
+            // Goodwe darf nur Haus + WB aus Netz versorgen, PV geht in Eigenverbrauch
+            $importLimit = max(0, $houseW + $wbTotalW);
             $d['op_mode']    = EMS_OP_GRIDREWARDS;
-            $d['gw_mode']    = GW_MODE_STANDBY;
-            $d['gw_power_w'] = 0;
-            $d['wb1_enable'] = false;
+            $d['gw_mode']    = GW_MODE_AC_IMPORT;
+            $d['gw_power_w'] = $importLimit;
+            $d['wb1_enable'] = false; // Tibber steuert Wallbox direkt
             $d['wb2_enable'] = false;
-            $d['reason']     = 'Grid Rewards aktiv - Batterie haelt SOC, Tibber steuert Wallbox';
+            $d['reason']     = sprintf(
+                'Grid Rewards: Tibber steuert WB, Import-Limit=%.0fW (Haus=%.0fW WB=%.0fW)',
+                $importLimit, $houseW, $wbTotalW
+            );
             return $d;
         }
 
@@ -638,18 +645,21 @@ class EMS extends IPSModule
         $pvW            = $s['pv_total_w'];
         $feedTariff     = $s['tib_feed'];
 
-        // 1. §14a Nacht + Batterie nicht voll → Netz laden
+        // ── 1. §14a Nacht-Laden ──────────────────────────────────────
         if ($s['enwg_in_window'] && $s['bat_active'] && $soc < ($socTargetNight - $hystSoc)) {
             $d['op_mode']    = EMS_OP_NET_CHARGE;
             $d['gw_mode']    = GW_MODE_AC_IMPORT;
             $d['gw_power_w'] = (int)$slsW;
             $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
             $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
-            $d['reason']     = sprintf('14a Nacht-Laden: SOC=%.0f%% Ziel=%.0f%% Preis=%.2fct', $soc, $socTargetNight, $price);
+            $d['reason']     = sprintf(
+                '14a Nacht-Laden: SOC=%.0f%% Ziel=%.0f%% Preis=%.2fct(eff)',
+                $soc, $socTargetNight, $price
+            );
             return $d;
         }
 
-        // 2. Tibber guenstig → Netz laden
+        // ── 2. Tibber guenstig → Netz laden ─────────────────────────
         if ($s['tib_active'] && $s['bat_active'] && $price < ($thCharge - $hystPrice) && $soc < ($socTargetNight - $hystSoc)) {
             $d['op_mode']    = EMS_OP_NET_CHARGE;
             $d['gw_mode']    = GW_MODE_AC_IMPORT;
@@ -660,7 +670,7 @@ class EMS extends IPSModule
             return $d;
         }
 
-        // 3. PV-Ueberschuss → Eigenverbrauch
+        // ── 3. PV-Ueberschuss → Eigenverbrauch ──────────────────────
         if ($pvW > $fcMinPower && $s['bat_active'] && $soc < ($socTargetDay - $hystSoc)) {
             $d['op_mode']    = EMS_OP_PV_SELFUSE;
             $d['gw_mode']    = GW_MODE_CHARGE_PV;
@@ -671,7 +681,7 @@ class EMS extends IPSModule
             return $d;
         }
 
-        // 4. Tibber teuer → Entladen
+        // ── 4. Tibber teuer → Entladen ───────────────────────────────
         if ($s['tib_active'] && $s['bat_active'] && $price > ($thDischarge + $hystPrice) && $soc > ($socMin + $hystSoc + $socReserve)) {
             $d['op_mode']    = EMS_OP_DISCHARGE;
             $d['gw_mode']    = GW_MODE_DISCHARGE;
@@ -682,7 +692,7 @@ class EMS extends IPSModule
             return $d;
         }
 
-        // 5. Tibber sehr teuer + ueber Einspeiseverguetung → Exportieren
+        // ── 5. Tibber sehr teuer → Exportieren ──────────────────────
         if ($s['tib_active'] && $s['bat_active'] && $price > ($thExport + $hystPrice) && $price > $feedTariff && $soc > ($socMin + $hystSoc + $socReserve)) {
             $d['op_mode']    = EMS_OP_EXPORT;
             $d['gw_mode']    = GW_MODE_AC_EXPORT;
@@ -693,11 +703,11 @@ class EMS extends IPSModule
             return $d;
         }
 
-        // 6. Wallbox freigeben wenn Preis akzeptabel
+        // ── 6. Wallbox freigeben wenn Preis akzeptabel ───────────────
         $wb1En = ($s['wb_active'] && $s['wb1_cable'] > 0 && $s['wb1_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
         $wb2En = ($s['wb_active'] && $s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
 
-        // 7. Fallback: Automatik
+        // ── 7. Fallback: Automatik ───────────────────────────────────
         $d['op_mode']    = EMS_OP_AUTO;
         $d['gw_mode']    = GW_MODE_AUTO;
         $d['gw_power_w'] = 0;
@@ -718,21 +728,23 @@ class EMS extends IPSModule
         $lastDecision = $this->ReadAttributeInteger('LastDecision');
         $now          = time();
 
-        // Cooldown prüfen
-        if ($d['gw_mode'] !== $lastMode && ($now - $lastDecision) < $cooldown) {
-            $this->emsLog(EMS_LOG_VERBOSE, 'Cooldown aktiv - Modus nicht geaendert (' . ($now - $lastDecision) . 's < ' . $cooldown . 's)');
+        // Cooldown pruefen — bei Grid Rewards immer aktualisieren
+        // da sich die Import-Leistung laufend aendern kann
+        $isGridRewards = ($d['op_mode'] === EMS_OP_GRIDREWARDS);
+        if (!$isGridRewards && $d['gw_mode'] !== $lastMode && ($now - $lastDecision) < $cooldown) {
+            $this->emsLog(EMS_LOG_VERBOSE, 'Cooldown aktiv (' . ($now - $lastDecision) . 's < ' . $cooldown . 's)');
             return;
         }
 
         // Goodwe Modus setzen
-        if ($d['gw_mode'] !== $lastMode) {
+        if ($d['gw_mode'] !== $lastMode || $isGridRewards) {
             $this->setGoodweMode($d['gw_mode'], $d['gw_power_w']);
             $this->WriteAttributeInteger('LastGoodweMode', $d['gw_mode']);
             $this->WriteAttributeInteger('LastDecision',   $now);
-            $this->emsLog(EMS_LOG_BASIC, 'Goodwe Modus -> ' . $d['gw_mode'] . ' (' . $d['reason'] . ')');
+            $this->emsLog(EMS_LOG_BASIC, 'Goodwe -> Modus ' . $d['gw_mode'] . ' | ' . $d['reason']);
         }
 
-        // Leistungseinstellung aktualisieren
+        // Leistungseinstellung immer aktualisieren wenn gesetzt
         if ($d['gw_power_w'] > 0) {
             $varPower = $this->ReadPropertyInteger('VAR_WR_EMS_Power');
             if ($varPower > 0) {
@@ -757,7 +769,7 @@ class EMS extends IPSModule
     {
         $varMode  = $this->ReadPropertyInteger('VAR_WR_EMS_Mode');
         $varPower = $this->ReadPropertyInteger('VAR_WR_EMS_Power');
-        if ($varMode  > 0) { $this->writeVar($varMode,  $mode);   }
+        if ($varMode  > 0) { $this->writeVar($varMode, $mode); }
         if ($varPower > 0 && $powerW > 0) { $this->writeVar($varPower, $powerW); }
     }
 
@@ -817,12 +829,16 @@ class EMS extends IPSModule
     //  Hilfsfunktionen
     // ----------------------------------------------------------------
 
+    /**
+     * Liest eine externe IPS-Variable sicher aus.
+     * Gibt $default zurueck wenn Variable nicht konfiguriert oder nicht vorhanden.
+     */
     private function readVar($property, $default)
     {
         $varId = $this->ReadPropertyInteger($property);
         if ($varId <= 0) { return $default; }
         if (!IPS_VariableExists($varId)) {
-            $this->emsLog(EMS_LOG_VERBOSE, 'Variable ' . $property . ' (ID ' . $varId . ') existiert nicht');
+            $this->emsLog(EMS_LOG_VERBOSE, 'Variable ' . $property . ' (ID ' . $varId . ') nicht gefunden');
             return $default;
         }
         return GetValue($varId);
@@ -830,26 +846,27 @@ class EMS extends IPSModule
 
     /**
      * Schreibt einen Wert auf eine externe IPS-Variable.
-     * Verwendet RequestAction() fuer read-only Variablen (Modbus, etc.)
-     * und SetValue() als Fallback fuer beschreibbare Variablen.
+     * Verwendet RequestAction() fuer Modbus/read-only Variablen,
+     * SetValue() als Fallback.
      */
     private function writeVar($varId, $value)
     {
         if ($varId <= 0) { return; }
         if (!IPS_VariableExists($varId)) {
-            $this->emsLog(EMS_LOG_VERBOSE, 'writeVar: Variable ID ' . $varId . ' existiert nicht');
+            $this->emsLog(EMS_LOG_VERBOSE, 'writeVar: Variable ID ' . $varId . ' nicht gefunden');
             return;
         }
         $varInfo = IPS_GetVariable($varId);
         if ($varInfo['VariableAction'] > 0) {
-            // Variable hat eine Aktion — RequestAction verwenden
             RequestAction($varId, $value);
         } else {
-            // Keine Aktion definiert — direkt schreiben
             SetValue($varId, $value);
         }
     }
 
+    /**
+     * Prueft ob aktuelle Uhrzeit im §14a-Zeitfenster liegt.
+     */
     private function isInEnwgWindow()
     {
         $startH = $this->ReadPropertyInteger('ENWG14A_Start_Hour');
@@ -861,10 +878,18 @@ class EMS extends IPSModule
         return ($hour >= $startH || $hour < $endH);
     }
 
+    /**
+     * Logging: SendDebug ins Instanz-Debug-Fenster +
+     * IPS_LogMessage ins Systemlog (nur Basis-Level).
+     */
     private function emsLog($level, $message)
     {
         $configLevel = $this->ReadPropertyInteger('EMS_Log_Level');
         if ($level > $configLevel) { return; }
-        IPS_LogMessage('EMS', $message);
+        $prefix = ($level === EMS_LOG_VERBOSE) ? 'VERBOSE' : 'INFO';
+        $this->SendDebug($prefix, $message, 0);
+        if ($level <= EMS_LOG_BASIC) {
+            IPS_LogMessage('EMS', $message);
+        }
     }
 }

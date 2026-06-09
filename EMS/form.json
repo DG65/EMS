@@ -1,9 +1,8 @@
 {
     "elements": [
-
         {
             "type": "ExpansionPanel",
-            "caption": "🔧 Allgemein & Schutz",
+            "caption": "Allgemein & Schutz",
             "expanded": true,
             "items": [
                 {
@@ -21,7 +20,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Netzanschluss-Limits ──────────────────"
+                    "caption": "── Netzanschluss-Limits ──────────────────────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -42,14 +41,14 @@
                 {
                     "type": "NumberSpinner",
                     "name": "EMS_SLS_Limit_W",
-                    "caption": "SLS-Grenze (Watt, berechnet)",
+                    "caption": "SLS-Grenze Watt (wird automatisch berechnet: A x 400V x 1.732)",
                     "minimum": 1000,
                     "maximum": 100000,
                     "suffix": " W"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Fallback bei Kommunikationsfehler ──────"
+                    "caption": "── Fallback bei Kommunikationsfehler ─────────────────"
                 },
                 {
                     "type": "Select",
@@ -71,87 +70,77 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Logging ──────────────────────────────"
+                    "caption": "── Logging ───────────────────────────────────────────"
                 },
                 {
                     "type": "Select",
                     "name": "EMS_Log_Level",
-                    "caption": "Logging-Level",
+                    "caption": "Logging-Level (Ausgabe im Instanz-Debug)",
                     "options": [
-                        { "caption": "Aus",        "value": 0 },
-                        { "caption": "Basis",      "value": 1 },
-                        { "caption": "Detailliert","value": 2 }
+                        { "caption": "Aus",         "value": 0 },
+                        { "caption": "Basis",       "value": 1 },
+                        { "caption": "Detailliert", "value": 2 }
                     ]
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "📡 Netzmesspunkte",
+            "caption": "Netzmesspunkte",
             "expanded": false,
             "items": [
                 {
                     "type": "Label",
-                    "caption": "── Primärmessung: Goodwe SmartMeter (Pflicht) ──"
+                    "caption": "── Primärmessung: Goodwe SmartMeter (Pflicht) ────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_L1_Power",
-                    "caption": "Netz L1 Leistung (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Netz L1 Leistung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_L2_Power",
-                    "caption": "Netz L2 Leistung (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Netz L2 Leistung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_L3_Power",
-                    "caption": "Netz L3 Leistung (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Netz L3 Leistung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_Total_Power",
-                    "caption": "Netz Gesamtleistung (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Netz Gesamtleistung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_L1_Current",
-                    "caption": "Netz L1 Strom (A)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Netz L1 Strom (A)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_L2_Current",
-                    "caption": "Netz L2 Strom (A)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Netz L2 Strom (A)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_L3_Current",
-                    "caption": "Netz L3 Strom (A)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Netz L3 Strom (A)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_Frequency",
-                    "caption": "Netzfrequenz (Hz)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Netzfrequenz (Hz)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_SM_Status",
-                    "caption": "SmartMeter Verbindungsstatus",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "SmartMeter Verbindungsstatus"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Sekundärmessung: Siemens PAC2200 (optional) ──"
+                    "caption": "── Sekundärmessung: Siemens PAC2200 (optional) ──────"
                 },
                 {
                     "type": "CheckBox",
@@ -161,210 +150,171 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Power",
-                    "caption": "PAC2200 Wirkleistung L1 (W)",
-                    "validVariableTypes": [ 1, 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Wirkleistung L1 (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Power",
-                    "caption": "PAC2200 Wirkleistung L2 (W)",
-                    "validVariableTypes": [ 1, 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Wirkleistung L2 (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Power",
-                    "caption": "PAC2200 Wirkleistung L3 (W)",
-                    "validVariableTypes": [ 1, 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Wirkleistung L3 (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Current",
-                    "caption": "PAC2200 Strom L1 (A)",
-                    "validVariableTypes": [ 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Strom L1 (A)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Current",
-                    "caption": "PAC2200 Strom L2 (A)",
-                    "validVariableTypes": [ 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Strom L2 (A)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Current",
-                    "caption": "PAC2200 Strom L3 (A)",
-                    "validVariableTypes": [ 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Strom L3 (A)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Import",
-                    "caption": "PAC2200 Wirkarbeit Bezug (Wh)",
-                    "validVariableTypes": [ 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Wirkarbeit Bezug (Wh)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Export",
-                    "caption": "PAC2200 Wirkarbeit Abgabe (Wh)",
-                    "validVariableTypes": [ 2 ],
-                    "visible": false
+                    "caption": "PAC2200 Wirkarbeit Abgabe (Wh)"
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "⚡ Wechselrichter & PV",
+            "caption": "Wechselrichter & PV",
             "expanded": false,
             "items": [
                 {
                     "type": "Label",
-                    "caption": "── EMS Steuerregister (schreibend) ──────────"
+                    "caption": "── EMS Steuerregister (schreibend) ───────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_EMS_Mode",
-                    "caption": "EMS Leistungsmodus (ID 49060)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "EMS Leistungsmodus (ID 49060)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_EMS_Power",
-                    "caption": "EMS Leistungseinstellung (ID 20610, W)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "EMS Leistungseinstellung (ID 20610, W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Export_Enable",
-                    "caption": "Leistungsexport Ja/Nein (ID 53749)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Leistungsexport Ja/Nein (ID 53749)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Export_Limit",
-                    "caption": "Limit Leistungsexport (ID 54017, W)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Limit Leistungsexport (ID 54017, W)"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Goodwe Zeitfenster (schreibend) ─────────"
+                    "caption": "── Goodwe Zeitfenster (schreibend) ───────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_Start",
-                    "caption": "Startzeit 1 (ID 53840)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Startzeit 1 (ID 53840)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_End",
-                    "caption": "Endzeit 1 (ID 19775)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Endzeit 1 (ID 19775)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_Power",
-                    "caption": "Batterieleistung 1 in Prozent (ID 23711)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Batterieleistung 1 in Prozent (ID 23711)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_Week",
-                    "caption": "Arbeitswoche 1 (ID 27399)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Arbeitswoche 1 (ID 27399)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_Start",
-                    "caption": "Startzeit 2 (ID 59917)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Startzeit 2 (ID 59917)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_End",
-                    "caption": "Endzeit 2 (ID 58454)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Endzeit 2 (ID 58454)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_Power",
-                    "caption": "Batterieleistung 2 in Prozent (ID 24072)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Batterieleistung 2 in Prozent (ID 24072)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_Week",
-                    "caption": "Arbeitswoche 2 (ID 44592)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Arbeitswoche 2 (ID 44592)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_Start",
-                    "caption": "Startzeit 3 (ID 29220)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Startzeit 3 (ID 29220)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_End",
-                    "caption": "Endzeit 3 (ID 56194)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Endzeit 3 (ID 56194)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_Power",
-                    "caption": "Batterieleistung 3 in Prozent (ID 36069)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Batterieleistung 3 in Prozent (ID 36069)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_Week",
-                    "caption": "Arbeitswoche 3 (ID 20549)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Arbeitswoche 3 (ID 20549)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_Start",
-                    "caption": "Startzeit 4 (ID 55084)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Startzeit 4 (ID 55084)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_End",
-                    "caption": "Endzeit 4 (ID 36555)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Endzeit 4 (ID 36555)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_Power",
-                    "caption": "Batterieleistung 4 in Prozent (ID 24977)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Batterieleistung 4 in Prozent (ID 24977)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_Week",
-                    "caption": "Arbeitswoche 4 (ID 53902)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Arbeitswoche 4 (ID 53902)"
                 },
                 {
                     "type": "Label",
-                    "caption": "── PV Messwerte (lesend) ──────────────────"
+                    "caption": "── PV Messwerte (lesend) ──────────────────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PV_Total_Power",
-                    "caption": "PV Gesamtleistung P Total (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "PV Gesamtleistung P Total (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PV_Day_Energy",
-                    "caption": "PV Tageserzeugung (kWh)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "PV Tageserzeugung (kWh)"
                 },
                 {
                     "type": "CheckBox",
@@ -374,64 +324,45 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PV_MPPT1_Power",
-                    "caption": "P MPPT1 (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "P MPPT1 (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PV_MPPT2_Power",
-                    "caption": "P MPPT2 (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "P MPPT2 (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PV_MPPT3_Power",
-                    "caption": "P MPPT3 (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "P MPPT3 (W)"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Wechselrichter Messwerte (lesend) ────────"
+                    "caption": "── Wechselrichter Messwerte (lesend) ─────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Total_Power",
-                    "caption": "WR Gesamtleistung AC (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "WR Gesamtleistung AC (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Temp",
-                    "caption": "WR Temperatur Gerät (°C)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "WR Temperatur Gerät (°C)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Temp_Cooler",
-                    "caption": "WR Temperatur Kühlkörper (°C)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "WR Temperatur Kühlkörper (°C)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Diag_Status",
-                    "caption": "WR Diagnose Status",
-                    "validVariableTypes": [ 1 ]
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Backup_Power",
-                    "caption": "Backup Leistung Gesamt (W)",
-                    "validVariableTypes": [ 1, 2 ]
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Backup_Active",
-                    "caption": "Backup aktiv (0/1)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WR Diagnose Status"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Schutzschwellen Wechselrichter ───────────"
+                    "caption": "── Schutzschwellen Wechselrichter ────────────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -443,10 +374,9 @@
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "🔋 Batteriespeicher",
+            "caption": "Batteriespeicher",
             "expanded": false,
             "items": [
                 {
@@ -471,7 +401,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── SOC-Grenzen ──────────────────────────"
+                    "caption": "── SOC-Grenzen ───────────────────────────────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -500,14 +430,14 @@
                 {
                     "type": "NumberSpinner",
                     "name": "BAT_SOC_Reserve_Backup",
-                    "caption": "SOC-Reserve Backup/Notfall (%)",
+                    "caption": "SOC-Reserve Notfall (%)",
                     "minimum": 0,
                     "maximum": 30,
                     "suffix": " %"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Temperaturschutz ─────────────────────"
+                    "caption": "── Temperatur- und Zellspannungsschutz ───────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -535,126 +465,107 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Batteriestring 1 ─────────────────────"
+                    "caption": "── Batteriestring 1 ──────────────────────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_SOC",
-                    "caption": "Bat1 SOC (%)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 SOC (%)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Power",
-                    "caption": "Bat1 Leistung (W)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 Leistung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Mode",
-                    "caption": "Bat1 Modus",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 Modus"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_SOH",
-                    "caption": "Bat1 SOH (%)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 SOH (%)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Temp",
-                    "caption": "Bat1 Paket Temperatur (°C)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Bat1 Paket Temperatur (°C)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Cell_V_Max",
-                    "caption": "Bat1 höchste Zellspannung (mV)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 höchste Zellspannung (mV)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Cell_V_Min",
-                    "caption": "Bat1 niedrigste Zellspannung (mV)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 niedrigste Zellspannung (mV)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Min_SOC_Online",
-                    "caption": "Bat1 Min SOC ONLINE (schreibend, %)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 Min SOC ONLINE (schreibend, %)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_Min_SOC_Offline",
-                    "caption": "Bat1 Min SOC OFFLINE (schreibend, %)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat1 Min SOC OFFLINE (schreibend, %)"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Batteriestring 2 (optional) ──────────────"
+                    "caption": "── Batteriestring 2 (optional) ───────────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_SOC",
-                    "caption": "Bat2 SOC (%)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 SOC (%)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Power",
-                    "caption": "Bat2 Leistung (W)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 Leistung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Mode",
-                    "caption": "Bat2 Modus",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 Modus"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_SOH",
-                    "caption": "Bat2 SOH (%)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 SOH (%)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Temp",
-                    "caption": "Bat2 Paket Temperatur (°C)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Bat2 Paket Temperatur (°C)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Cell_V_Max",
-                    "caption": "Bat2 höchste Zellspannung (mV)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 höchste Zellspannung (mV)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Cell_V_Min",
-                    "caption": "Bat2 niedrigste Zellspannung (mV)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 niedrigste Zellspannung (mV)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Min_SOC_Online",
-                    "caption": "Bat2 Min SOC ONLINE (schreibend, %)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 Min SOC ONLINE (schreibend, %)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Min_SOC_Offline",
-                    "caption": "Bat2 Min SOC OFFLINE (schreibend, %)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Bat2 Min SOC OFFLINE (schreibend, %)"
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "🚗 Wallboxen",
+            "caption": "Wallboxen",
             "expanded": false,
             "items": [
                 {
@@ -672,11 +583,11 @@
                 {
                     "type": "CheckBox",
                     "name": "WB_GridRewards_Active",
-                    "caption": "Grid Rewards Modus aktiv (Tibber steuert Wallbox)"
+                    "caption": "Grid Rewards Modus aktiv (Tibber steuert Wallbox, Batterie passiv)"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Wallbox 1 ────────────────────────────"
+                    "caption": "── Wallbox 1 ─────────────────────────────────────────"
                 },
                 {
                     "type": "SelectInstance",
@@ -709,42 +620,36 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB1_Status",
-                    "caption": "WB1 Status",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB1 Status"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB1_Power",
-                    "caption": "WB1 Aktuelle Leistung (kW)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "WB1 Aktuelle Leistung (kW)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB1_Active",
-                    "caption": "WB1 Wallbox aktiv (Boolean)",
-                    "validVariableTypes": [ 0 ]
+                    "caption": "WB1 Wallbox aktiv (Boolean)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB1_Cable",
-                    "caption": "WB1 Kabel-Leistungsfähigkeit",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB1 Kabel-Leistungsfähigkeit"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB1_Phases",
-                    "caption": "WB1 Aktuell genutzte Phasen",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB1 Aktuell genutzte Phasen"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB1_Error",
-                    "caption": "WB1 Fehler",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB1 Fehler"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Wallbox 2 (optional) ─────────────────────"
+                    "caption": "── Wallbox 2 (optional) ──────────────────────────────"
                 },
                 {
                     "type": "SelectInstance",
@@ -777,42 +682,36 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Status",
-                    "caption": "WB2 Status",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB2 Status"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Power",
-                    "caption": "WB2 Aktuelle Leistung (kW)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "WB2 Aktuelle Leistung (kW)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Active",
-                    "caption": "WB2 Wallbox aktiv (Boolean)",
-                    "validVariableTypes": [ 0 ]
+                    "caption": "WB2 Wallbox aktiv (Boolean)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Cable",
-                    "caption": "WB2 Kabel-Leistungsfähigkeit",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB2 Kabel-Leistungsfähigkeit"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Phases",
-                    "caption": "WB2 Aktuell genutzte Phasen",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB2 Aktuell genutzte Phasen"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Error",
-                    "caption": "WB2 Fehler",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "WB2 Fehler"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Ladesteuerung ────────────────────────"
+                    "caption": "── Ladesteuerung ─────────────────────────────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -832,59 +731,51 @@
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "🌡️ Wärmepumpe (Monitoring)",
+            "caption": "Waermepumpe (Monitoring)",
             "expanded": false,
             "items": [
                 {
                     "type": "CheckBox",
                     "name": "HP_Active",
-                    "caption": "Wärmepumpe aktivieren (nur Monitoring)"
+                    "caption": "Wärmepumpe aktivieren (nur Monitoring, keine Steuerung)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_HP_Power",
-                    "caption": "Leistung zur Wärmeerzeugung (W)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Leistung zur Wärmeerzeugung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_HP_State",
-                    "caption": "Wärmepumpenstatus (Ein/Aus)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Wärmepumpenstatus (Ein/Aus)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_HP_Outside_Temp",
-                    "caption": "Aussentemperatur (°C)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Aussentemperatur (°C)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_HP_Mode",
-                    "caption": "Betriebsmodus (Heizen/Kühlen/BW)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Betriebsmodus (Heizen/Kühlen/BW)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_HP_COP_Heat",
-                    "caption": "COP-Wert Heizung",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "COP-Wert Heizung"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_HP_DHW_Temp",
-                    "caption": "Temperatur Brauchwasser (°C)",
-                    "validVariableTypes": [ 1, 2 ]
+                    "caption": "Temperatur Brauchwasser (°C)"
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "💰 Tibber & Tarif",
+            "caption": "Tibber & Tarif",
             "expanded": false,
             "items": [
                 {
@@ -894,53 +785,46 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Tibber Variablen ─────────────────────"
+                    "caption": "── Tibber Variablen ──────────────────────────────────"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_Price",
-                    "caption": "Aktueller Strompreis (ct/kWh)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Aktueller Strompreis (ct/kWh)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_Level",
-                    "caption": "Aktuelles Preisniveau (act_level)",
-                    "validVariableTypes": [ 1 ]
+                    "caption": "Aktuelles Preisniveau (act_level)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_Feed_Tariff",
-                    "caption": "Einspeisevergütung (ct/kWh)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Einspeisevergütung (ct/kWh)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_PT15M_Today",
-                    "caption": "15-Min-Preise Heute JSON (PT15M_T0)",
-                    "validVariableTypes": [ 3 ]
+                    "caption": "15-Min-Preise Heute JSON"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_PT15M_Tomorrow",
-                    "caption": "15-Min-Preise Morgen JSON (PT15M_T1)",
-                    "validVariableTypes": [ 3 ]
+                    "caption": "15-Min-Preise Morgen JSON"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_PT60M_Today",
-                    "caption": "Stundenpreise Heute JSON (PT60M_T0)",
-                    "validVariableTypes": [ 3 ]
+                    "caption": "Stundenpreise Heute JSON"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_Ahead_15M",
-                    "caption": "Preisvorschau 15-Min Energie-Optimierer",
-                    "validVariableTypes": [ 3 ]
+                    "caption": "Preisvorschau 15-Min Energie-Optimierer"
                 },
                 {
                     "type": "Label",
-                    "caption": "── Preisschwellen ──────────────────────"
+                    "caption": "── Preisschwellen ────────────────────────────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -980,10 +864,9 @@
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "⚖️ §14a EnWG — Netzentgelt-Zeitfenster",
+            "caption": "14a EnWG — Netzentgelt-Zeitfenster",
             "expanded": false,
             "items": [
                 {
@@ -994,8 +877,7 @@
                 {
                     "type": "ValidationTextBox",
                     "name": "ENWG14A_Provider",
-                    "caption": "Netzbetreiber (Dokumentation)",
-                    "validate": ""
+                    "caption": "Netzbetreiber (Dokumentation)"
                 },
                 {
                     "type": "NumberSpinner",
@@ -1023,10 +905,9 @@
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "☀️ PV Forecast",
+            "caption": "PV Forecast",
             "expanded": false,
             "items": [
                 {
@@ -1037,20 +918,17 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_FC_Today",
-                    "caption": "Vorhersage Heute (kWh)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Vorhersage Heute (kWh)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_FC_Tomorrow",
-                    "caption": "Vorhersage Morgen (kWh)",
-                    "validVariableTypes": [ 2 ]
+                    "caption": "Vorhersage Morgen (kWh)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_FC_JSON",
-                    "caption": "PVForecast JSON (stündliche Auflösung)",
-                    "validVariableTypes": [ 3 ]
+                    "caption": "PVForecast JSON (stündliche Auflösung)"
                 },
                 {
                     "type": "NumberSpinner",
@@ -1070,27 +948,18 @@
                 }
             ]
         },
-
         {
             "type": "ExpansionPanel",
-            "caption": "⚙️ Optimierungsparameter",
+            "caption": "Optimierungsparameter",
             "expanded": false,
             "items": [
                 {
-                    "type": "Label",
-                    "caption": "── Gewichtung ──────────────────────────"
-                },
-                {
                     "type": "NumberSpinner",
                     "name": "OPT_Weight_Selfuse",
-                    "caption": "Gewichtung Eigenverbrauch (0–100%)",
+                    "caption": "Gewichtung Eigenverbrauch (0-100%)",
                     "minimum": 0,
                     "maximum": 100,
                     "suffix": " %"
-                },
-                {
-                    "type": "Label",
-                    "caption": "── Hysterese ───────────────────────────"
                 },
                 {
                     "type": "NumberSpinner",
@@ -1118,10 +987,6 @@
                     "suffix": " ct"
                 },
                 {
-                    "type": "Label",
-                    "caption": "── Timing ──────────────────────────────"
-                },
-                {
                     "type": "NumberSpinner",
                     "name": "OPT_Cooldown_Sec",
                     "caption": "Globaler Cooldown zwischen Entscheidungen (s)",
@@ -1139,7 +1004,6 @@
                 }
             ]
         }
-
     ],
     "actions": [
         {
@@ -1151,6 +1015,11 @@
             "type": "Button",
             "caption": "Status anzeigen",
             "onClick": "echo EMS_GetStatus($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Nacht-Ladefenster planen",
+            "onClick": "EMS_PlanNightCharge($id);"
         }
     ]
 }
