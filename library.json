@@ -2,11 +2,5 @@
   "id": "{90286A25-E6C9-4A66-BD4E-0CFB707C2C6C}",
   "name": "EMS",
   "author": "Dietmar Gureth",
-  "url": "https://github.com/DG65/EMS",
-  "version": "1.0.0",
-  "build": 1,
-  "date": 0,
-  "compatibility": {
-    "version": "9.0"
-  }
+  "version": "1.0.0"
 }
