@@ -2,8 +2,7 @@
     "elements": [
         {
             "type": "ExpansionPanel",
-            "caption": "Allgemein & Schutz",
-            "icon": "Gear",
+            "caption": "🔧 Allgemein & Schutz",
             "expanded": true,
             "items": [
                 {
@@ -56,9 +55,18 @@
                     "name": "EMS_Fallback_Mode",
                     "caption": "Fallback-Modus",
                     "options": [
-                        { "caption": "Automatik (Goodwe entscheidet)", "value": 1 },
-                        { "caption": "Gestoppt (Batterie inaktiv)",    "value": 0 },
-                        { "caption": "Bereitschaft (SOC halten)",      "value": 8 }
+                        {
+                            "caption": "Automatik (Goodwe entscheidet)",
+                            "value": 1
+                        },
+                        {
+                            "caption": "Gestoppt (Batterie inaktiv)",
+                            "value": 0
+                        },
+                        {
+                            "caption": "Bereitschaft (SOC halten)",
+                            "value": 8
+                        }
                     ]
                 },
                 {
@@ -78,17 +86,25 @@
                     "name": "EMS_Log_Level",
                     "caption": "Logging-Level (Ausgabe im Instanz-Debug)",
                     "options": [
-                        { "caption": "Aus",         "value": 0 },
-                        { "caption": "Basis",       "value": 1 },
-                        { "caption": "Detailliert", "value": 2 }
+                        {
+                            "caption": "Aus",
+                            "value": 0
+                        },
+                        {
+                            "caption": "Basis",
+                            "value": 1
+                        },
+                        {
+                            "caption": "Detailliert",
+                            "value": 2
+                        }
                     ]
                 }
             ]
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Netzmesspunkte",
-            "icon": "Plug",
+            "caption": "📡 Netzmesspunkte",
             "expanded": false,
             "items": [
                 {
@@ -153,56 +169,87 @@
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Power",
                     "caption": "PAC2200 Wirkleistung L1 (W)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Power",
                     "caption": "PAC2200 Wirkleistung L2 (W)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Power",
                     "caption": "PAC2200 Wirkleistung L3 (W)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Current",
                     "caption": "PAC2200 Strom L1 (A)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Current",
                     "caption": "PAC2200 Strom L2 (A)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Current",
                     "caption": "PAC2200 Strom L3 (A)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Import",
                     "caption": "PAC2200 Wirkarbeit Bezug (Wh)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Export",
                     "caption": "PAC2200 Wirkarbeit Abgabe (Wh)",
-                    "visible": { "type": "PropertyCondition", "property": "PAC2200_Active", "value": true }
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "PAC2200_Active",
+                        "value": true
+                    }
                 }
             ]
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Wechselrichter & PV",
-            "icon": "Sun",
+            "caption": "⚡ Wechselrichter & PV",
             "expanded": false,
             "items": [
                 {
@@ -387,8 +434,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Batteriespeicher",
-            "icon": "Battery",
+            "caption": "🔋 Batteriespeicher",
             "expanded": false,
             "items": [
                 {
@@ -577,8 +623,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Wallboxen",
-            "icon": "Car",
+            "caption": "🚗 Wallboxen",
             "expanded": false,
             "items": [
                 {
@@ -746,8 +791,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Waermepumpe (Monitoring)",
-            "icon": "Flame",
+            "caption": "🌡️ Wärmepumpe (Monitoring)",
             "expanded": false,
             "items": [
                 {
@@ -789,8 +833,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Tibber & Tarif",
-            "icon": "Euro",
+            "caption": "💰 Tibber & Tarif",
             "expanded": false,
             "items": [
                 {
@@ -881,8 +924,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "14a EnWG — Netzentgelt-Zeitfenster",
-            "icon": "Clock",
+            "caption": "⚖️ §14a EnWG — Netzentgelt-Zeitfenster",
             "expanded": false,
             "items": [
                 {
@@ -923,8 +965,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "PV Forecast",
-            "icon": "Graph",
+            "caption": "☀️ PV Forecast",
             "expanded": false,
             "items": [
                 {
@@ -967,8 +1008,7 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Optimierungsparameter",
-            "icon": "Settings",
+            "caption": "⚙️ Optimierungsparameter",
             "expanded": false,
             "items": [
                 {
