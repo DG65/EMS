@@ -2,7 +2,7 @@
     "elements": [
         {
             "type": "ExpansionPanel",
-            "caption": "🔧 Allgemein & Schutz",
+            "caption": "🔧 Allgemein",
             "expanded": true,
             "items": [
                 {
@@ -19,31 +19,11 @@
                     "suffix": " s"
                 },
                 {
-                    "type": "Label",
-                    "caption": "── Netzanschluss-Limits ──────────────────────────────"
-                },
-                {
                     "type": "NumberSpinner",
-                    "name": "EMS_SLS_Limit_A",
-                    "caption": "SLS-Grenze (Ampere)",
-                    "minimum": 10,
-                    "maximum": 100,
-                    "suffix": " A"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "EMS_HAK_Limit_A",
-                    "caption": "HAK-Grenze (Ampere)",
-                    "minimum": 10,
-                    "maximum": 100,
-                    "suffix": " A"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "EMS_SLS_Limit_W",
-                    "caption": "SLS-Grenze Watt (wird automatisch berechnet: A x 400V x 1.732)",
+                    "name": "EMS_Max_Power_W",
+                    "caption": "Max. EMS-Leistungseinstellung (W) — WR-Limit, via IPS-Profil begrenzt",
                     "minimum": 1000,
-                    "maximum": 100000,
+                    "maximum": 34642,
                     "suffix": " W"
                 },
                 {
@@ -130,21 +110,6 @@
                     "type": "SelectVariable",
                     "name": "VAR_SM_Total_Power",
                     "caption": "Netz Gesamtleistung (W)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_SM_L1_Current",
-                    "caption": "Netz L1 Strom (A)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_SM_L2_Current",
-                    "caption": "Netz L2 Strom (A)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_SM_L3_Current",
-                    "caption": "Netz L3 Strom (A)"
                 },
                 {
                     "type": "SelectVariable",
@@ -417,18 +382,6 @@
                     "type": "SelectVariable",
                     "name": "VAR_WR_Diag_Status",
                     "caption": "WR Diagnose Status"
-                },
-                {
-                    "type": "Label",
-                    "caption": "── Schutzschwellen Wechselrichter ────────────────────"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "EMS_WR_Temp_Max",
-                    "caption": "Max. WR-Temperatur für Drosselung (°C)",
-                    "minimum": 50,
-                    "maximum": 90,
-                    "suffix": " °C"
                 }
             ]
         },
@@ -495,34 +448,6 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Temperatur- und Zellspannungsschutz ───────────────"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "BAT_Temp_Max",
-                    "caption": "Max. Batterietemperatur für Drosselung (°C)",
-                    "minimum": 30,
-                    "maximum": 60,
-                    "suffix": " °C"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "BAT_Cell_Voltage_Max",
-                    "caption": "Max. Zellspannung Schutzgrenze (mV)",
-                    "minimum": 3400,
-                    "maximum": 3800,
-                    "suffix": " mV"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "BAT_Cell_Voltage_Min",
-                    "caption": "Min. Zellspannung Schutzgrenze (mV)",
-                    "minimum": 2500,
-                    "maximum": 3200,
-                    "suffix": " mV"
-                },
-                {
-                    "type": "Label",
                     "caption": "── Batteriestring 1 ──────────────────────────────────"
                 },
                 {
@@ -544,21 +469,6 @@
                     "type": "SelectVariable",
                     "name": "VAR_BAT1_SOH",
                     "caption": "Bat1 SOH (%)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_BAT1_Temp",
-                    "caption": "Bat1 Paket Temperatur (°C)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_BAT1_Cell_V_Max",
-                    "caption": "Bat1 höchste Zellspannung (mV)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_BAT1_Cell_V_Min",
-                    "caption": "Bat1 niedrigste Zellspannung (mV)"
                 },
                 {
                     "type": "SelectVariable",
@@ -593,21 +503,6 @@
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_SOH",
                     "caption": "Bat2 SOH (%)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_BAT2_Temp",
-                    "caption": "Bat2 Paket Temperatur (°C)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_BAT2_Cell_V_Max",
-                    "caption": "Bat2 höchste Zellspannung (mV)"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_BAT2_Cell_V_Min",
-                    "caption": "Bat2 niedrigste Zellspannung (mV)"
                 },
                 {
                     "type": "SelectVariable",

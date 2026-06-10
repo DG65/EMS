@@ -50,9 +50,7 @@ class EMS extends IPSModule
         // ── Allgemein & Schutz ──────────────────────────────────────
         $this->RegisterPropertyBoolean('EMS_Active',           false);
         $this->RegisterPropertyInteger('EMS_Interval',         30);
-        $this->RegisterPropertyInteger('EMS_SLS_Limit_A',      50);
-        $this->RegisterPropertyInteger('EMS_HAK_Limit_A',      63);
-        $this->RegisterPropertyInteger('EMS_SLS_Limit_W',      34641);
+        $this->RegisterPropertyInteger('EMS_Max_Power_W',      34500);
         $this->RegisterPropertyInteger('EMS_Fallback_Mode',    GW_MODE_AUTO);
         $this->RegisterPropertyInteger('EMS_Fallback_Timeout', 60);
         $this->RegisterPropertyInteger('EMS_Log_Level',        EMS_LOG_BASIC);
@@ -62,9 +60,6 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('VAR_SM_L2_Power',      0);
         $this->RegisterPropertyInteger('VAR_SM_L3_Power',      0);
         $this->RegisterPropertyInteger('VAR_SM_Total_Power',   0);
-        $this->RegisterPropertyInteger('VAR_SM_L1_Current',    0);
-        $this->RegisterPropertyInteger('VAR_SM_L2_Current',    0);
-        $this->RegisterPropertyInteger('VAR_SM_L3_Current',    0);
         $this->RegisterPropertyInteger('VAR_SM_Frequency',     0);
         $this->RegisterPropertyInteger('VAR_SM_Status',        0);
         $this->RegisterPropertyBoolean('PAC2200_Active',       false);
@@ -98,7 +93,6 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('VAR_WR_Temp',          0);
         $this->RegisterPropertyInteger('VAR_WR_Temp_Cooler',   0);
         $this->RegisterPropertyInteger('VAR_WR_Diag_Status',   0);
-        $this->RegisterPropertyInteger('EMS_WR_Temp_Max',      75);
 
         // ── Batteriespeicher ────────────────────────────────────────
         $this->RegisterPropertyBoolean('BAT_Active',               false);
@@ -108,17 +102,11 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('BAT_SOC_Target_Night',     100);
         $this->RegisterPropertyInteger('BAT_SOC_Target_Day',       80);
         $this->RegisterPropertyInteger('BAT_SOC_Reserve_Backup',   10);
-        $this->RegisterPropertyInteger('BAT_Temp_Max',             45);
-        $this->RegisterPropertyInteger('BAT_Cell_Voltage_Max',     3600);
-        $this->RegisterPropertyInteger('BAT_Cell_Voltage_Min',     2900);
         for ($i = 1; $i <= 2; $i++) {
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_SOC',            0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Power',          0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Mode',           0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_SOH',            0);
-            $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Temp',           0);
-            $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Cell_V_Max',     0);
-            $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Cell_V_Min',     0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Min_SOC_Online', 0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Min_SOC_Offline',0);
         }
@@ -225,15 +213,6 @@ class EMS extends IPSModule
     {
         parent::ApplyChanges();
 
-        // SLS-Grenze in Watt automatisch berechnen: A x 400V x sqrt(3)
-        $slsA  = $this->ReadPropertyInteger('EMS_SLS_Limit_A');
-        $slsW  = (int)round($slsA * 400 * 1.7321);
-        if ($this->ReadPropertyInteger('EMS_SLS_Limit_W') !== $slsW) {
-            IPS_SetProperty($this->InstanceID, 'EMS_SLS_Limit_W', $slsW);
-            IPS_ApplyChanges($this->InstanceID);
-            return;
-        }
-
         $active   = $this->ReadPropertyBoolean('EMS_Active');
         $interval = $this->ReadPropertyInteger('EMS_Interval');
 
@@ -263,14 +242,6 @@ class EMS extends IPSModule
         try {
             $state      = $this->readState();
             $this->updateStatusVars($state);
-            $protection = $this->checkProtection($state);
-
-            if ($protection['triggered']) {
-                $this->applyProtection($protection);
-                $this->WriteAttributeInteger('ConsecutiveErrors', 0);
-                return;
-            }
-
             $decision = $this->optimize($state);
             $this->applyDecision($decision, $state);
             $this->WriteAttributeInteger('ConsecutiveErrors', 0);
@@ -379,10 +350,10 @@ class EMS extends IPSModule
         }
         $target    = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
         $capKwh    = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
-        $slsW      = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_W');
+        $maxW      = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
 
-        // Ladedauer abschaetzen: Ladegeschwindigkeit = min(SLS, 0.5C)
-        $chargeKw    = min($slsW / 1000.0, $capKwh * 0.5);
+        // Ladedauer abschaetzen: Ladegeschwindigkeit = min(Max-Leistung, 0.5C)
+        $chargeKw    = min($maxW / 1000.0, $capKwh * 0.5);
         $neededKwh   = max(0.0, ($target - $soc) / 100.0 * $capKwh);
         $neededHrs   = ($chargeKw > 0 && $neededKwh > 0) ? ($neededKwh / $chargeKw) : 0.0;
         $neededSlots = max(1, (int)ceil($neededHrs * 4)); // 15-Min-Slots
@@ -591,60 +562,30 @@ class EMS extends IPSModule
         $s['grid_l1_w']     = (float)$this->readVar('VAR_SM_L1_Power',    0);
         $s['grid_l2_w']     = (float)$this->readVar('VAR_SM_L2_Power',    0);
         $s['grid_l3_w']     = (float)$this->readVar('VAR_SM_L3_Power',    0);
-        $s['grid_l1_a']     = (float)$this->readVar('VAR_SM_L1_Current',  0);
-        $s['grid_l2_a']     = (float)$this->readVar('VAR_SM_L2_Current',  0);
-        $s['grid_l3_a']     = (float)$this->readVar('VAR_SM_L3_Current',  0);
-
-        // PAC2200 optional
-        if ($this->ReadPropertyBoolean('PAC2200_Active')) {
-            $s['pac_l1_a']  = (float)$this->readVar('VAR_PAC_L1_Current', 0);
-            $s['pac_l2_a']  = (float)$this->readVar('VAR_PAC_L2_Current', 0);
-            $s['pac_l3_a']  = (float)$this->readVar('VAR_PAC_L3_Current', 0);
-        } else {
-            $s['pac_l1_a']  = 0.0;
-            $s['pac_l2_a']  = 0.0;
-            $s['pac_l3_a']  = 0.0;
-        }
 
         // PV
         $s['pv_total_w']    = (float)$this->readVar('VAR_PV_Total_Power', 0);
 
         // Wechselrichter
         $s['wr_total_w']    = (float)$this->readVar('VAR_WR_Total_Power', 0);
-        $s['wr_temp']       = (float)$this->readVar('VAR_WR_Temp',        25);
 
         // Batterie
         $s['bat_active']    = $this->ReadPropertyBoolean('BAT_Active');
         if ($s['bat_active']) {
-            $soc1           = (float)$this->readVar('VAR_BAT1_SOC',        0);
-            $pow1           = (float)$this->readVar('VAR_BAT1_Power',      0);
-            $temp1          = (float)$this->readVar('VAR_BAT1_Temp',      25);
-            $cvMax1         = (int)  $this->readVar('VAR_BAT1_Cell_V_Max',3600);
-            $cvMin1         = (int)  $this->readVar('VAR_BAT1_Cell_V_Min',2900);
+            $soc1           = (float)$this->readVar('VAR_BAT1_SOC',   0);
+            $pow1           = (float)$this->readVar('VAR_BAT1_Power', 0);
             if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
-                $soc2       = (float)$this->readVar('VAR_BAT2_SOC',        0);
-                $pow2       = (float)$this->readVar('VAR_BAT2_Power',      0);
-                $temp2      = (float)$this->readVar('VAR_BAT2_Temp',      25);
-                $cvMax2     = (int)  $this->readVar('VAR_BAT2_Cell_V_Max',3600);
-                $cvMin2     = (int)  $this->readVar('VAR_BAT2_Cell_V_Min',2900);
+                $soc2       = (float)$this->readVar('VAR_BAT2_SOC',   0);
+                $pow2       = (float)$this->readVar('VAR_BAT2_Power', 0);
                 $s['bat_soc']    = ($soc1 + $soc2) / 2.0;
                 $s['bat_pow_w']  = $pow1 + $pow2;
-                $s['bat_temp']   = max($temp1, $temp2);
-                $s['bat_cv_max'] = max($cvMax1, $cvMax2);
-                $s['bat_cv_min'] = min($cvMin1, $cvMin2);
             } else {
                 $s['bat_soc']    = $soc1;
                 $s['bat_pow_w']  = $pow1;
-                $s['bat_temp']   = $temp1;
-                $s['bat_cv_max'] = $cvMax1;
-                $s['bat_cv_min'] = $cvMin1;
             }
         } else {
             $s['bat_soc']    = 0.0;
             $s['bat_pow_w']  = 0.0;
-            $s['bat_temp']   = 25.0;
-            $s['bat_cv_max'] = 3600;
-            $s['bat_cv_min'] = 2900;
         }
 
         // Wallboxen
@@ -727,94 +668,10 @@ class EMS extends IPSModule
     }
 
     // ----------------------------------------------------------------
-    //  Layer 3: Schutz-Layer
-    // ----------------------------------------------------------------
-
-    private function checkProtection($s)
-    {
-        $p = array('triggered' => false, 'reason' => '', 'action' => '');
-
-        // SLS-Schutz phasengenau
-        $slsLimit  = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_A');
-        $threshold = $slsLimit * 0.95;
-        $phases    = array('L1' => $s['grid_l1_a'], 'L2' => $s['grid_l2_a'], 'L3' => $s['grid_l3_a']);
-        foreach ($phases as $phase => $current) {
-            if (abs($current) > $threshold) {
-                $p['triggered'] = true;
-                $p['reason']    = sprintf('SLS-Schutz: %s Strom %.1f A (Grenze %.1f A)', $phase, $current, $slsLimit);
-                $p['action']    = 'sls';
-                return $p;
-            }
-        }
-
-        // Gesamtleistung NAP
-        $slsWatt = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_W');
-        if ($s['grid_total_w'] > $slsWatt * 0.97) {
-            $p['triggered'] = true;
-            $p['reason']    = sprintf('SLS-Schutz Gesamt: %.0f W (Grenze %.0f W)', $s['grid_total_w'], $slsWatt);
-            $p['action']    = 'sls';
-            return $p;
-        }
-
-        // WR-Ueberhitzung
-        $wrTempMax = (float)$this->ReadPropertyInteger('EMS_WR_Temp_Max');
-        if ($s['wr_temp'] > $wrTempMax) {
-            $p['triggered'] = true;
-            $p['reason']    = sprintf('WR-Ueberhitzung: %.1f C (Max %.1f C)', $s['wr_temp'], $wrTempMax);
-            $p['action']    = 'throttle';
-            return $p;
-        }
-
-        // Batterie-Schutz
-        if ($s['bat_active']) {
-            $batTempMax = (float)$this->ReadPropertyInteger('BAT_Temp_Max');
-            if ($s['bat_temp'] > $batTempMax) {
-                $p['triggered'] = true;
-                $p['reason']    = sprintf('Batterie-Ueberhitzung: %.1f C (Max %.1f C)', $s['bat_temp'], $batTempMax);
-                $p['action']    = 'bat_stop';
-                return $p;
-            }
-            $cvMax = $this->ReadPropertyInteger('BAT_Cell_Voltage_Max');
-            $cvMin = $this->ReadPropertyInteger('BAT_Cell_Voltage_Min');
-            if ($s['bat_cv_max'] > $cvMax) {
-                $p['triggered'] = true;
-                $p['reason']    = sprintf('Zellspannung zu hoch: %d mV (Max %d mV)', $s['bat_cv_max'], $cvMax);
-                $p['action']    = 'bat_stop';
-                return $p;
-            }
-            if ($s['bat_cv_min'] < $cvMin) {
-                $p['triggered'] = true;
-                $p['reason']    = sprintf('Zellspannung zu niedrig: %d mV (Min %d mV)', $s['bat_cv_min'], $cvMin);
-                $p['action']    = 'bat_stop';
-                return $p;
-            }
-        }
-
-        return $p;
-    }
-
-    private function applyProtection($p)
-    {
-        $this->emsLog(EMS_LOG_BASIC, 'SCHUTZ: ' . $p['reason']);
-        $this->SetValue('EMS_Status',     'SCHUTZ: ' . $p['reason']);
-        $this->SetValue('EMS_LastAction', 'SCHUTZ: ' . $p['reason']);
-
-        if ($p['action'] === 'sls') {
-            $this->setAllWallboxes(false);
-            $this->setGoodweMode(GW_MODE_STANDBY, 0);
-            $this->SetValue('EMS_Mode', EMS_OP_STANDBY);
-        } elseif ($p['action'] === 'throttle') {
-            $this->setAllWallboxes(false);
-            $this->setGoodweMode(GW_MODE_AUTO, 0);
-            $this->SetValue('EMS_Mode', EMS_OP_AUTO);
-        } elseif ($p['action'] === 'bat_stop') {
-            $this->setGoodweMode(GW_MODE_STANDBY, 0);
-            $this->SetValue('EMS_Mode', EMS_OP_STANDBY);
-        }
-    }
-
-    // ----------------------------------------------------------------
-    //  Layer 4: Optimierungs-Layer
+    //  Layer 3: Optimierungs-Layer
+    //  Hinweis: Schutzfunktionen (Temperatur, Zellspannung, SLS) macht
+    //  die Hardware selbst (Goodwe WR + BMS). Die EMS-Leistungs-
+    //  einstellung ist per IPS-Variablenprofil auf max. 34500 W begrenzt.
     // ----------------------------------------------------------------
 
     private function optimize($s)
@@ -856,7 +713,7 @@ class EMS extends IPSModule
         $socReserve     = (float)$this->ReadPropertyInteger('BAT_SOC_Reserve_Backup');
         $hystSoc        = (float)$this->ReadPropertyInteger('OPT_Hysteresis_SOC');
         $hystPrice      = (float)$this->ReadPropertyFloat('OPT_Hysteresis_Price');
-        $slsW           = (float)$this->ReadPropertyInteger('EMS_SLS_Limit_W');
+        $maxW           = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
         $thCharge       = (float)$this->ReadPropertyFloat('TIB_Threshold_Charge');
         $thDischarge    = (float)$this->ReadPropertyFloat('TIB_Threshold_Discharge');
         $thWB           = (float)$this->ReadPropertyFloat('TIB_Threshold_WB');
@@ -872,7 +729,7 @@ class EMS extends IPSModule
         if ($s['enwg_in_window'] && $s['bat_active'] && $soc < ($socTargetNight - $hystSoc)) {
             $d['op_mode']    = EMS_OP_NET_CHARGE;
             $d['gw_mode']    = GW_MODE_AC_IMPORT;
-            $d['gw_power_w'] = (int)$slsW;
+            $d['gw_power_w'] = (int)$maxW;
             $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
             $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
             $d['reason']     = sprintf(
@@ -892,7 +749,7 @@ class EMS extends IPSModule
             if (!$pvCovers) {
                 $d['op_mode']    = EMS_OP_NET_CHARGE;
                 $d['gw_mode']    = GW_MODE_AC_IMPORT;
-                $d['gw_power_w'] = (int)$slsW;
+                $d['gw_power_w'] = (int)$maxW;
                 $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
                 $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
                 $d['reason']     = sprintf(
