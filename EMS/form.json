@@ -3,6 +3,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Allgemein & Schutz",
+            "icon": "Gear",
             "expanded": true,
             "items": [
                 {
@@ -87,6 +88,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Netzmesspunkte",
+            "icon": "Plug",
             "expanded": false,
             "items": [
                 {
@@ -200,6 +202,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Wechselrichter & PV",
+            "icon": "Sun",
             "expanded": false,
             "items": [
                 {
@@ -385,6 +388,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Batteriespeicher",
+            "icon": "Battery",
             "expanded": false,
             "items": [
                 {
@@ -574,6 +578,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Wallboxen",
+            "icon": "Car",
             "expanded": false,
             "items": [
                 {
@@ -742,6 +747,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Waermepumpe (Monitoring)",
+            "icon": "Flame",
             "expanded": false,
             "items": [
                 {
@@ -784,6 +790,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Tibber & Tarif",
+            "icon": "Euro",
             "expanded": false,
             "items": [
                 {
@@ -875,6 +882,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "14a EnWG — Netzentgelt-Zeitfenster",
+            "icon": "Clock",
             "expanded": false,
             "items": [
                 {
@@ -916,6 +924,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "PV Forecast",
+            "icon": "Graph",
             "expanded": false,
             "items": [
                 {
@@ -959,6 +968,7 @@
         {
             "type": "ExpansionPanel",
             "caption": "Optimierungsparameter",
+            "icon": "Settings",
             "expanded": false,
             "items": [
                 {
