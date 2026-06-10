@@ -400,7 +400,7 @@
                     "name": "BAT_String_Count",
                     "caption": "Anzahl Batteriestrings",
                     "minimum": 1,
-                    "maximum": 4
+                    "maximum": 2
                 },
                 {
                     "type": "NumberSpinner",
@@ -482,37 +482,72 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Batteriestring 2 (optional) ───────────────────────"
+                    "caption": "── Batteriestring 2 (optional) ───────────────────────",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_SOC",
-                    "caption": "Bat2 SOC (%)"
+                    "caption": "Bat2 SOC (%)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Power",
-                    "caption": "Bat2 Leistung (W)"
+                    "caption": "Bat2 Leistung (W)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Mode",
-                    "caption": "Bat2 Modus"
+                    "caption": "Bat2 Modus",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_SOH",
-                    "caption": "Bat2 SOH (%)"
+                    "caption": "Bat2 SOH (%)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Min_SOC_Online",
-                    "caption": "Bat2 Min SOC ONLINE (schreibend, %)"
+                    "caption": "Bat2 Min SOC ONLINE (schreibend, %)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_BAT2_Min_SOC_Offline",
-                    "caption": "Bat2 Min SOC OFFLINE (schreibend, %)"
+                    "caption": "Bat2 Min SOC OFFLINE (schreibend, %)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "BAT_String_Count",
+                        "value": 2
+                    }
                 }
             ]
         },
@@ -531,7 +566,7 @@
                     "name": "WB_Count",
                     "caption": "Anzahl Wallboxen",
                     "minimum": 1,
-                    "maximum": 8
+                    "maximum": 2
                 },
                 {
                     "type": "CheckBox",
@@ -602,12 +637,22 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Wallbox 2 (optional) ──────────────────────────────"
+                    "caption": "── Wallbox 2 (optional) ──────────────────────────────",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectInstance",
                     "name": "WB2_Instance",
-                    "caption": "Wallbox 2 — go-e Charger Instanz-ID"
+                    "caption": "Wallbox 2 — go-e Charger Instanz-ID",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "NumberSpinner",
@@ -615,7 +660,12 @@
                     "caption": "WB2 maximale Ladeleistung (W)",
                     "minimum": 1380,
                     "maximum": 22000,
-                    "suffix": " W"
+                    "suffix": " W",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "NumberSpinner",
@@ -623,44 +673,84 @@
                     "caption": "WB2 minimale Ladeleistung (W)",
                     "minimum": 1380,
                     "maximum": 22000,
-                    "suffix": " W"
+                    "suffix": " W",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "NumberSpinner",
                     "name": "WB2_Priority",
                     "caption": "WB2 Priorität (1 = höchste)",
                     "minimum": 1,
-                    "maximum": 8
+                    "maximum": 8,
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Status",
-                    "caption": "WB2 Status"
+                    "caption": "WB2 Status",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Power",
-                    "caption": "WB2 Aktuelle Leistung (kW)"
+                    "caption": "WB2 Aktuelle Leistung (kW)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Active",
-                    "caption": "WB2 Wallbox aktiv (Boolean)"
+                    "caption": "WB2 Wallbox aktiv (Boolean)",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Cable",
-                    "caption": "WB2 Kabel-Leistungsfähigkeit"
+                    "caption": "WB2 Kabel-Leistungsfähigkeit",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Phases",
-                    "caption": "WB2 Aktuell genutzte Phasen"
+                    "caption": "WB2 Aktuell genutzte Phasen",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WB2_Error",
-                    "caption": "WB2 Fehler"
+                    "caption": "WB2 Fehler",
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "WB_Count",
+                        "value": 2
+                    }
                 },
                 {
                     "type": "Label",
