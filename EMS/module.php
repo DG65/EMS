@@ -37,6 +37,14 @@ define('EMS_LOG_OFF',         0);
 define('EMS_LOG_BASIC',       1);
 define('EMS_LOG_VERBOSE',     2);
 
+// NRG-Stack Partnermodul-GUIDs (fuer automatische Discovery, siehe discoverPartners())
+define('GUID_CHARGERHUB',    '{9256C34E-5CFD-4F37-8BFE-E65390EBB37C}');
+define('GUID_METERHUB',      '{BAB8E05C-9150-43B9-9F2B-E5215FA54F0A}');
+define('GUID_INVERTERHUB',   '{BBE2C593-1A91-426D-A714-29A9C7E87589}');
+define('GUID_HEISHAMON',     '{1919151A-3C0F-4C09-B906-291638EC1469}');
+define('GUID_TESSIEVEHICLE', '{3F1F7E31-8BA0-4B8F-9B62-47DAD7A0B6C9}');
+define('GUID_TIBBERGRIDREWARD', '{E92F62F4-88A6-4C6E-9F0D-E76C3B1C9A01}');
+
 class EMS extends IPSModule
 {
     // ----------------------------------------------------------------
@@ -202,6 +210,10 @@ class EMS extends IPSModule
         $this->RegisterAttributeInteger('LastWB2Switch',     0);
         $this->RegisterAttributeInteger('LastDecision',      0);
         $this->RegisterAttributeInteger('ConsecutiveErrors', 0);
+
+        // ── NRG-Stack Discovery (additiv, siehe discoverPartners()) ──
+        $this->RegisterAttributeString('PartnerCache', '{}');
+        $this->RegisterVariableString('EMS_Partners', 'NRG-Stack Partnermodule', '', 5);
     }
 
     public function Destroy()
@@ -258,6 +270,118 @@ class EMS extends IPSModule
                 $this->applyFallback();
             }
         }
+    }
+
+    // ----------------------------------------------------------------
+    //  NRG-Stack Discovery — automatische Partnermodul-Erkennung
+    //  (additiv, ersetzt vorerst NICHT die manuelle Variablenverknuepfung
+    //  oben — Migrationsschritt in mehreren Etappen, siehe SUITE.md)
+    // ----------------------------------------------------------------
+
+    /**
+     * Sucht alle installierten Instanzen eines Partnermoduls und ruft,
+     * sofern vorhanden, dessen *_GetFunctions()/GetState()-Vertrag ab.
+     * Nie eine harte Abhaengigkeit: fehlt ein Modul, liefert die Suche
+     * einfach eine leere Liste (Verbund-Grundregel, function_exists-Guard).
+     */
+    public function Discover()
+    {
+        $partners = array();
+
+        $partners['inverterhub'] = $this->discoverContract(GUID_INVERTERHUB, 'IHUB_GetFunctions');
+        $partners['meterhub']    = $this->discoverContract(GUID_METERHUB,    'MHUB_GetFunctions');
+        $partners['chargerhub']  = $this->discoverContract(GUID_CHARGERHUB,  'CHUB_GetFunctions');
+        $partners['heishamon']   = $this->discoverContract(GUID_HEISHAMON,   'HEISHA_GetFunctions');
+        $partners['tessie']      = $this->discoverContract(GUID_TESSIEVEHICLE, 'TESSIE_GetVehicleState');
+
+        // Tibber liefert keine *_GetFunctions-Liste, sondern eigene Getter
+        // pro Instanz (Preiskurve/Tarif/aktive Fremdsteuerung).
+        $tibberInstances = array();
+        foreach (IPS_GetInstanceListByModuleID(GUID_TIBBERGRIDREWARD) as $id) {
+            $entry = array('instanceID' => $id, 'label' => IPS_GetName($id));
+            if (function_exists('TIBBERGR_GetTariffConfig')) {
+                $entry['tariffConfig'] = TIBBERGR_GetTariffConfig($id);
+            }
+            if (function_exists('TIBBERGR_GetActiveControls')) {
+                $entry['activeControls'] = TIBBERGR_GetActiveControls($id);
+            }
+            $tibberInstances[] = $entry;
+        }
+        $partners['tibber'] = $tibberInstances;
+
+        $this->WriteAttributeString('PartnerCache', json_encode($partners));
+
+        $summary = sprintf(
+            'InverterHub=%d MeterHub=%d ChargerHub=%d HeishaMon=%d Tessie=%d Tibber=%d',
+            count($partners['inverterhub']), count($partners['meterhub']),
+            count($partners['chargerhub']),  count($partners['heishamon']),
+            count($partners['tessie']),      count($partners['tibber'])
+        );
+        $this->SetValue('EMS_Partners', $summary);
+        $this->emsLog(EMS_LOG_BASIC, 'Discover: ' . $summary);
+
+        return $partners;
+    }
+
+    /**
+     * Fuer ein gegebenes Partnermodul (GUID) alle installierten Instanzen
+     * finden und deren Vertragsfunktion abrufen — mit function_exists-Guard,
+     * damit ein fehlendes Modul die Discovery nie zum Absturz bringt.
+     */
+    private function discoverContract($moduleGUID, $function)
+    {
+        $results = array();
+        if (!function_exists($function)) {
+            return $results; // Partnermodul nicht installiert
+        }
+        foreach (IPS_GetInstanceListByModuleID($moduleGUID) as $id) {
+            $data = call_user_func($function, $id);
+            if (is_array($data)) {
+                // GetFunctions-Verträge liefern Listen, GetVehicleState/GetState
+                // liefern ein einzelnes Objekt — beides normalisiert als Liste
+                // von Eintraegen mit instanceID, damit der Konsument einheitlich
+                // iterieren kann.
+                if ($this->isListContract($data)) {
+                    foreach ($data as $entry) {
+                        $entry['instanceID'] = $id;
+                        $results[] = $entry;
+                    }
+                } else {
+                    $data['instanceID'] = $id;
+                    $results[] = $data;
+                }
+            }
+        }
+        return $results;
+    }
+
+    /**
+     * Unterscheidet Listen-Vertraege (GetFunctions: numerisch indizierte
+     * Liste von Eintraegen, z.B. mehrere Ladepunkte) von Objekt-Vertraegen
+     * (GetVehicleState: ein einzelnes assoziatives Objekt) — siehe
+     * SUITE.md "Platzierung von contractVersion". Ein Listen-Eintrag hat
+     * fortlaufende Integer-Schluessel ab 0 UND sein erstes Element ist
+     * selbst ein Array; ein Objekt-Vertrag hat String-Schluessel.
+     */
+    private function isListContract($data)
+    {
+        if (empty($data)) {
+            return true; // leere Liste ist ein gueltiger Listen-Vertrag
+        }
+        $firstKey = array_key_first($data);
+        return is_int($firstKey) && is_array($data[$firstKey]);
+    }
+
+    /**
+     * Im letzten Discover()-Lauf gefundene Partnerdaten, ohne erneut
+     * abzufragen (fuer Konsumenten, die nur den zuletzt bekannten Stand
+     * brauchen, z.B. das Formular oder eine Kachel).
+     */
+    public function GetPartners()
+    {
+        $json = $this->ReadAttributeString('PartnerCache');
+        $data = json_decode($json, true);
+        return is_array($data) ? $data : array();
     }
 
     public function GetStatus()

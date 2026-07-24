@@ -1051,6 +1051,11 @@
     "actions": [
         {
             "type": "Button",
+            "caption": "🔎 NRG-Stack-Partnermodule suchen",
+            "onClick": "EMS_Discover($id);"
+        },
+        {
+            "type": "Button",
             "caption": "EMS jetzt ausführen (manuell)",
             "onClick": "EMS_Update($id);"
         },
