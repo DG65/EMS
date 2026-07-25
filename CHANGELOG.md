@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 (2026-07-25)
+- `EMS_PlanNegativePriceExport()`: Solarspitzengesetz-Strategie — schafft vor einem
+  erwarteten Negativpreis-Fenster (aus der Tibber-PT15M-Preiskurve) rechtzeitig genug
+  freien Speicherplatz (Vorentladung), damit der PV-Überschuss während der Negativpreis-
+  Phase in den Speicher statt unvergütet ins Netz geht. Nutzt die PV-Prognose (VAR_FC_JSON)
+  für die Bedarfsschätzung im Fenster. Spiegelbild zu `PlanNightCharge()`.
+- Neues Formular-Panel "☀️⚡ Solarspitzengesetz" + Button zum manuellen Auslösen.
+- Bewusste Vereinfachung (dokumentiert im Code): Hausverbrauch im Fenster wird über einen
+  konfigurierbaren Mittelwert geschätzt, keine echte Lastprognose-Anbindung (LFC) — als
+  nächster Ausbauschritt vorgemerkt.
+
 ## 0.3.0 (2026-07-25)
 - `EMS_GetSituation()`: wertet die Discovery-Daten nach der Situation-A/B-Prioritäts-
   hierarchie aus (EMS besitzt Schreibkanal vs. externer Akteur besitzt Schreibkanal) —

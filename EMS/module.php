@@ -161,6 +161,10 @@ class EMS extends IPSModule
         $this->RegisterPropertyFloat(  'TIB_Threshold_WB',         20.0);
         $this->RegisterPropertyFloat(  'TIB_Threshold_Export',     20.0);
 
+        // ── Solarspitzengesetz (negative Preise) ───────────────────
+        $this->RegisterPropertyBoolean('NEG_PRICE_Active',       false);
+        $this->RegisterPropertyInteger('NEG_Avg_House_Load_W',   500);
+
         // ── §14a EnWG ───────────────────────────────────────────────
         $this->RegisterPropertyBoolean('ENWG14A_Active',           false);
         $this->RegisterPropertyString( 'ENWG14A_Provider',         '');
@@ -624,9 +628,167 @@ class EMS extends IPSModule
         ));
     }
 
+    /**
+     * Solarspitzengesetz-Strategie: Schafft VOR einem erwarteten
+     * Negativpreis-Fenster genug freien Speicherplatz, damit der
+     * PV-Ueberschuss waehrend der Negativpreis-Zeit in den Speicher
+     * wandert statt unverguetet (oder mit Kosten, da Preis < 0) ins
+     * Netz zu gehen. Der so "gerettete" Strom wird spaeter, sobald der
+     * Preis wieder positiv ist, regulaer entladen/eingespeist — das
+     * macht die normale Tages-Optimierung (optimize()) von selbst,
+     * diese Funktion muss dafuer nichts Zusaetzliches tun.
+     *
+     * Spiegelbild zu PlanNightCharge(): dort wird der Speicher VOR einem
+     * Billigpreis-Fenster geleert, um Platz fuers Laden zu schaffen; hier
+     * wird er VOR einem Negativpreis-Fenster geleert (Slot 2 statt 1),
+     * um Platz fuer PV-Aufnahme zu schaffen.
+     *
+     * Bewusst vereinfachtes Lastmodell: es gibt noch keine externe
+     * Lastprognose-Anbindung (LFC_GetForecast) im EMS-Kern, deshalb wird
+     * der Hausverbrauch waehrend des Fensters mit einem konfigurierbaren
+     * Mittelwert geschaetzt (NEG_Avg_House_Load_W) statt einer echten
+     * Prognose. Sauberer waere eine direkte LFC-Anbindung — als
+     * naechster Ausbauschritt vorgemerkt, nicht Teil dieser ersten Fassung.
+     */
+    public function PlanNegativePriceExport()
+    {
+        if (!$this->ReadPropertyBoolean('NEG_PRICE_Active')) {
+            $this->emsLog(EMS_LOG_VERBOSE, 'PlanNegativePriceExport: Solarspitzen-Strategie deaktiviert');
+            return;
+        }
+        if (!$this->ReadPropertyBoolean('TIBBER_Active') || !$this->ReadPropertyBoolean('BAT_Active')) {
+            $this->emsLog(EMS_LOG_BASIC, 'PlanNegativePriceExport: braucht Tibber + Batterie aktiv');
+            return;
+        }
+
+        $window = $this->findNegativePriceWindow();
+        if (empty($window)) {
+            $this->emsLog(EMS_LOG_BASIC, 'PlanNegativePriceExport: kein Negativpreis-Fenster in den naechsten 48h gefunden');
+            return;
+        }
+
+        $fromSlot = min(array_keys($window));
+        $toSlot   = max(array_keys($window));
+
+        // Erwarteten PV-Ueberschuss waehrend des Negativpreis-Fensters schaetzen
+        $pvDuringWindowKwh = $this->parseForecastForSlots($fromSlot, $toSlot);
+        $avgHouseW  = (float)$this->ReadPropertyInteger('NEG_Avg_House_Load_W');
+        $hoursInWin = count($window) / 4.0; // 15-Min-Slots -> Stunden
+        $houseDuringWindowKwh = $avgHouseW / 1000.0 * $hoursInWin;
+
+        $neededHeadroomKwh = max(0.0, $pvDuringWindowKwh - $houseDuringWindowKwh);
+        if ($neededHeadroomKwh <= 0.1) {
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'PlanNegativePriceExport: PV-Vorschau (%.1f kWh) deckt den geschaetzten Hausverbrauch (%.1f kWh) im Negativpreis-Fenster bereits ab, kein Vorentladen noetig',
+                $pvDuringWindowKwh, $houseDuringWindowKwh
+            ));
+            return;
+        }
+
+        // Aktuellen SOC/Kapazitaet lesen, Ziel-SOC vor dem Fenster berechnen
+        $soc1 = (float)$this->readVar('VAR_BAT1_SOC', 0);
+        if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
+            $soc = ($soc1 + (float)$this->readVar('VAR_BAT2_SOC', 0)) / 2.0;
+        } else {
+            $soc = $soc1;
+        }
+        $capKwh  = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
+        $socMin  = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
+
+        $freeUpPct  = ($capKwh > 0) ? ($neededHeadroomKwh / $capKwh * 100.0) : 0.0;
+        $targetSoc  = max($socMin, $soc - $freeUpPct);
+
+        if ($targetSoc >= $soc - 1.0) {
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'PlanNegativePriceExport: SOC=%.0f%% ist bereits nah am Zielwert %.0f%%, kein Vorentladen noetig',
+                $soc, $targetSoc
+            ));
+            return;
+        }
+
+        // Vorentlade-Fenster: von jetzt bis Fensterbeginn (ECO-Slot 2, um
+        // Slot 1 = Nacht-Laden nicht zu ueberschreiben)
+        $nowSlot = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
+        if ($fromSlot <= $nowSlot) {
+            $this->emsLog(EMS_LOG_BASIC, 'PlanNegativePriceExport: Negativpreis-Fenster hat bereits begonnen, kein Vorlauf mehr moeglich');
+            return;
+        }
+        $startMin = $nowSlot * 15;
+        $endMin   = $fromSlot * 15;
+        $sH = (int)($startMin / 60) % 24; $sM = $startMin % 60;
+        $eH = (int)($endMin   / 60) % 24; $eM = $endMin   % 60;
+
+        // Slot 2 = Export/Entladen-Fenster, Zielwert als Prozent kodiert
+        // (SetECOWindow nutzt den powerPct-Parameter generisch als Sollwert)
+        $this->SetECOWindow(2, $sH, $sM, $eH, $eM, (int)round($targetSoc), 65407);
+
+        $this->emsLog(EMS_LOG_BASIC, sprintf(
+            'PlanNegativePriceExport: Negativpreis %02d:%02d-%02d:%02d erwartet, PV-Vorschau %.1f kWh, Hausbedarf %.1f kWh, Speicher wird bis %02d:%02d auf %.0f%% (von %.0f%%) vorentladen',
+            (int)($fromSlot*15/60)%24, ($fromSlot*15)%60, (int)($toSlot*15/60)%24, ($toSlot*15)%60,
+            $pvDuringWindowKwh, $houseDuringWindowKwh, $eH, $eM, $targetSoc, $soc
+        ));
+    }
+
     // ----------------------------------------------------------------
     //  Tibber PT15M + PV-Forecast Hilfsmethoden
     // ----------------------------------------------------------------
+
+    /**
+     * Findet das naechste zusammenhaengende Negativpreis-Fenster
+     * (price < 0) in den PT15M-Preisdaten der naechsten 48h.
+     * Gibt [ absoluterSlot => preis ] zurueck, leer falls keins gefunden.
+     */
+    private function findNegativePriceWindow()
+    {
+        $varToday    = $this->ReadPropertyInteger('VAR_TIB_PT15M_Today');
+        $varTomorrow = $this->ReadPropertyInteger('VAR_TIB_PT15M_Tomorrow');
+        $todayJson    = ($varToday    > 0 && IPS_VariableExists($varToday))    ? GetValue($varToday)    : '';
+        $tomorrowJson = ($varTomorrow > 0 && IPS_VariableExists($varTomorrow)) ? GetValue($varTomorrow) : '';
+        $allPrices = array_merge($this->parsePT15M($todayJson), $this->parsePT15M($tomorrowJson));
+
+        $nowSlot = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
+        $window = array();
+        $inWindow = false;
+        for ($slot = $nowSlot; $slot < count($allPrices); $slot++) {
+            if ($allPrices[$slot] < 0) {
+                $window[$slot] = $allPrices[$slot];
+                $inWindow = true;
+            } elseif ($inWindow) {
+                break; // erstes zusammenhaengendes Fenster reicht
+            }
+        }
+        return $window;
+    }
+
+    /**
+     * Summiert die pv_estimate-Werte aus VAR_FC_JSON, deren Zeitstempel
+     * in den angegebenen 15-Min-Slotbereich (heute, absolute Slotzahl
+     * 0-191 wie bei den Preisdaten) faellt.
+     */
+    private function parseForecastForSlots($fromSlot, $toSlot)
+    {
+        $varId = $this->ReadPropertyInteger('VAR_FC_JSON');
+        if ($varId <= 0 || !IPS_VariableExists($varId)) { return 0.0; }
+        $json = GetValue($varId);
+        if (empty($json)) { return 0.0; }
+        $data = json_decode($json, true);
+        if (!is_array($data)) { return 0.0; }
+
+        $today0h = strtotime('today 00:00');
+        $fromTs  = $today0h + $fromSlot * 15 * 60;
+        $toTs    = $today0h + ($toSlot + 1) * 15 * 60;
+
+        $sum = 0.0;
+        foreach ($data as $entry) {
+            if (!is_array($entry)) { continue; }
+            $ts = 0;
+            if (isset($entry['ts']))   { $ts = (int)$entry['ts']; }
+            elseif (isset($entry['tiso'])) { $ts = (int)strtotime($entry['tiso']); }
+            if ($ts < $fromTs || $ts >= $toTs) { continue; }
+            if (isset($entry['pv_estimate'])) { $sum += (float)$entry['pv_estimate']; }
+        }
+        return $sum;
+    }
 
     /**
      * Gibt ein assoziatives Array [ absoluterSlot => preis ] fuer das

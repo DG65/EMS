@@ -909,6 +909,30 @@
         },
         {
             "type": "ExpansionPanel",
+            "caption": "☀️⚡ Solarspitzengesetz — Speicher-Vorentladung bei Negativpreisen",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "NEG_PRICE_Active",
+                    "caption": "Vor Negativpreis-Fenstern Speicherplatz freimachen"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Braucht Tibber + Batterie + PV-Forecast aktiv. Schafft rechtzeitig genug freien Speicherplatz, damit PV-Überschuss während negativer Börsenpreise in den Speicher statt unvergütet ins Netz geht — Einspeisung später bei positivem Preis."
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "NEG_Avg_House_Load_W",
+                    "caption": "Geschätzter durchschnittlicher Hausverbrauch (W) — bis eine echte Lastprognose angebunden ist",
+                    "minimum": 0,
+                    "maximum": 20000,
+                    "suffix": " W"
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
             "caption": "⚖️ §14a EnWG — Netzentgelt-Zeitfenster",
             "expanded": false,
             "items": [
@@ -1068,6 +1092,11 @@
             "type": "Button",
             "caption": "Nacht-Ladefenster planen",
             "onClick": "EMS_PlanNightCharge($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "☀️⚡ Negativpreis-Vorentladung planen",
+            "onClick": "EMS_PlanNegativePriceExport($id);"
         }
     ]
 }
