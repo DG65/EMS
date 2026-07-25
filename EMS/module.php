@@ -214,6 +214,7 @@ class EMS extends IPSModule
         // ── NRG-Stack Discovery (additiv, siehe discoverPartners()) ──
         $this->RegisterAttributeString('PartnerCache', '{}');
         $this->RegisterVariableString('EMS_Partners', 'NRG-Stack Partnermodule', '', 5);
+        $this->RegisterVariableString('EMS_Situation', 'Steuerhoheit (Situation A/B)', '', 6);
     }
 
     public function Destroy()
@@ -320,6 +321,19 @@ class EMS extends IPSModule
         $this->SetValue('EMS_Partners', $summary);
         $this->emsLog(EMS_LOG_BASIC, 'Discover: ' . $summary);
 
+        // Situation A/B direkt mit aktualisieren, damit EMS_Situation nie
+        // veraltete Daten zu einer frischeren PartnerCache zeigt.
+        $situation = $this->GetSituation();
+        $countB = 0;
+        foreach ($situation as $s) {
+            if ($s['situation'] === 'B') { $countB++; }
+        }
+        $situationSummary = sprintf(
+            '%d Geräte gesamt, davon %d in Situation B (Fremdsteuerung, EMS beobachtet nur)',
+            count($situation), $countB
+        );
+        $this->SetValue('EMS_Situation', $situationSummary);
+
         return $partners;
     }
 
@@ -382,6 +396,102 @@ class EMS extends IPSModule
         $json = $this->ReadAttributeString('PartnerCache');
         $data = json_decode($json, true);
         return is_array($data) ? $data : array();
+    }
+
+    // ----------------------------------------------------------------
+    //  Situation A/B — Steuerhoheit je Geraet
+    //  (siehe Memory ems-prioritaetshierarchie: Situation A = EMS besitzt
+    //  den Schreibkanal, echte interne Prioritaet; Situation B = ein
+    //  externer Akteur besitzt den Schreibkanal, EMS erkennt nur und
+    //  weicht zurueck, uebersteuert NIE)
+    // ----------------------------------------------------------------
+
+    /**
+     * Wertet die zuletzt per Discover() gefundenen Partnerdaten aus und
+     * bestimmt je steuerbarem Geraet, ob das EMS schreiben darf
+     * (Situation A) oder nur beobachten muss (Situation B), inkl. Quelle.
+     * Liest NICHTS live nach — arbeitet auf dem PartnerCache-Attribut,
+     * damit diese Funktion beliebig oft ohne Netzwerk-/Modbus-Last
+     * aufgerufen werden kann.
+     */
+    public function GetSituation()
+    {
+        $partners = $this->GetPartners();
+        $situation = array();
+
+        // InverterHub: controlAuthority direkt aus dem Vertrag (heute gebaut)
+        foreach ((array)($partners['inverterhub'] ?? array()) as $inv) {
+            $authority = $inv['controlAuthority'] ?? 'none';
+            $situation[] = array(
+                'domain'     => 'inverter',
+                'instanceID' => $inv['instanceID'] ?? 0,
+                'label'      => $inv['manufacturer'] ?? 'Wechselrichter',
+                'situation'  => ($authority === 'ems') ? 'A' : 'B',
+                'source'     => $authority,
+                'writable'   => ($authority === 'ems') && (bool)($inv['controllable'] ?? false),
+            );
+        }
+
+        // ChargerHub: managedBy-Feld (none/ems = Situation A, alles andere = B)
+        foreach ((array)($partners['chargerhub'] ?? array()) as $chg) {
+            $managedBy = $chg['managedBy'] ?? 'none';
+            $isEmsOwned = in_array($managedBy, array('none', 'ems'), true);
+            $situation[] = array(
+                'domain'     => 'wallbox',
+                'instanceID' => $chg['instanceID'] ?? 0,
+                'label'      => $chg['label'] ?? 'Wallbox',
+                'situation'  => $isEmsOwned ? 'A' : 'B',
+                'source'     => $managedBy,
+                'writable'   => $isEmsOwned,
+            );
+        }
+
+        // HeishaMon: keine externe Fremdsteuerung bekannt -> immer Situation A,
+        // aber das EMS steuert bewusst nicht aktiv (siehe README-Sicherheitshinweis:
+        // haeufige Schreibzugriffe koennen den EEPROM schaedigen).
+        foreach ((array)($partners['heishamon'] ?? array()) as $hp) {
+            $situation[] = array(
+                'domain'     => 'heatpump',
+                'instanceID' => $hp['instanceID'] ?? 0,
+                'label'      => $hp['Caption'] ?? 'Wärmepumpe',
+                'situation'  => 'A',
+                'source'     => 'ems',
+                'writable'   => false, // bewusst inaktiv, siehe README
+            );
+        }
+
+        // Tessie: Situation B, sobald Tibber Grid Rewards fuer dieses Fahrzeug
+        // die Ladehoheit hat (kein direkter Schreibkanal des EMS aufs Fahrzeug
+        // selbst — Fahrzeugladung laeuft ohnehin ueber den Charger, nicht Tessie).
+        foreach ((array)($partners['tessie'] ?? array()) as $veh) {
+            $isGridReward = (bool)($veh['scheduledChargingActive'] ?? false);
+            $situation[] = array(
+                'domain'     => 'vehicle',
+                'instanceID' => $veh['instanceID'] ?? 0,
+                'label'      => $veh['name'] ?? 'Fahrzeug',
+                'situation'  => $isGridReward ? 'B' : 'A',
+                'source'     => $isGridReward ? 'tibber' : 'ems',
+                'writable'   => false, // EMS steuert das Fahrzeug nicht direkt, nur den Charger
+            );
+        }
+
+        // Tibber: GetActiveControls zeigt explizit, welche Geraete Tibber
+        // gerade fremdsteuert (Situation B) — als eigener Eintrag je aktivem
+        // Eingriff, informativ fuers Log/die Kachel.
+        foreach ((array)($partners['tibber'] ?? array()) as $tib) {
+            foreach ((array)($tib['activeControls'] ?? array()) as $ctrl) {
+                $situation[] = array(
+                    'domain'     => $ctrl['type'] ?? 'unknown',
+                    'instanceID' => $ctrl['deviceId'] ?? 0,
+                    'label'      => $ctrl['name'] ?? 'Tibber-gesteuertes Gerät',
+                    'situation'  => 'B',
+                    'source'     => 'tibber',
+                    'writable'   => false,
+                );
+            }
+        }
+
+        return $situation;
     }
 
     public function GetStatus()

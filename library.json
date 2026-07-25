@@ -3,9 +3,9 @@
     "author": "DG65",
     "name": "EMS",
     "url": "https://github.com/DG65/EMS",
-    "version": "0.2.0",
-    "build": 2,
-    "date": 1753401600,
+    "version": "0.3.0",
+    "build": 3,
+    "date": 1753488000,
     "compatibility": {
         "version": "9.0"
     }

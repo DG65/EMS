@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 (2026-07-25)
+- `EMS_GetSituation()`: wertet die Discovery-Daten nach der Situation-A/B-Prioritäts-
+  hierarchie aus (EMS besitzt Schreibkanal vs. externer Akteur besitzt Schreibkanal) —
+  InverterHub (`controlAuthority`), ChargerHub (`managedBy`), HeishaMon (bewusst nie
+  schreibend), Tessie (Grid-Rewards-Erkennung), Tibber (`GetActiveControls`).
+- Neue Statusvariable `EMS_Situation` (Kurzfassung, wird bei jedem `Discover()`
+  automatisch mit aktualisiert).
+
 ## 0.2.0 (2026-07-25)
 - Erste NRG-Stack-Discovery-Schicht: `EMS_Discover()` findet automatisch installierte
   Partnermodule (InverterHub, MeterHub, ChargerHub, HeishaMon, Tessie, TibberGridRewards)
