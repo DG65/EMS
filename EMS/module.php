@@ -1632,6 +1632,13 @@ class EMS extends IPSModule
                 // Prefix_RequestAction() exponiert -- der Kernel-Einstiegspunkt ist
                 // IPS_RequestAction($InstanceID, $Ident, $Value) (siehe ChargerHub-Befund
                 // 25.07.2026, gleiche Ursache bei InverterHub).
+                //
+                // ctl_ems_enable (Register 47505) ist der Hauptschalter, der die
+                // EMS-Steuerung am WR ueberhaupt erst scharf schaltet -- ohne ihn
+                // ignoriert der Goodwe jede ctl_ems_mode/ctl_ems_power-Vorgabe und
+                // faehrt seine eigene Selbstverbrauchs-Logik (Fund 25.07.2026: Batterie
+                // entlud trotz korrekt gesetztem Modus=3 nicht, weil enable=false war).
+                IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', true);
                 IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
                 if ($powerW > 0) {
                     IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', $powerW);

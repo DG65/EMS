@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.2 (2026-07-25)
+- **Kritischer Fix**: `setGoodweMode()` setzte nie `ctl_ems_enable` (Register 47505, der
+  EMS-Hauptschalter am WR) — der Goodwe ignorierte dadurch jede `ctl_ems_mode`/
+  `ctl_ems_power`-Vorgabe und fuhr weiter seine eigene Selbstverbrauchs-Logik. Live
+  beobachtet: EMS entschied korrekt "Tibber teuer → Entladen", `ctl_ems_mode` wurde auch
+  korrekt auf 3 gesetzt, Batterie entlud aber nicht, weil `ctl_ems_enable=false` blieb.
+  Jetzt wird `ctl_ems_enable=true` vor jedem Moduswechsel mitgesendet.
+
 ## 0.6.1 (2026-07-25)
 - **Kritischer Fix Schreibpfad**: `IHUB_RequestAction`/`CHUB_RequestAction` existieren als
   Funktionsnamen nie — `RequestAction()` ist ein IPSModule-Kernel-Methodenname, IP-Symcon
