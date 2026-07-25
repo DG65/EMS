@@ -49,6 +49,22 @@ define('GUID_HEISHAMON',     '{1919151A-3C0F-4C09-B906-291638EC1469}');
 define('GUID_TESSIEVEHICLE', '{3F1F7E31-8BA0-4B8F-9B62-47DAD7A0B6C9}');
 define('GUID_TIBBERGRIDREWARD', '{E92F62F4-88A6-4C6E-9F0D-E76C3B1C9A01}');
 
+// GoodweET: Dietmars konsolidierter, tatsaechlich live laufender WR-Treiber
+// (nicht Teil des generischen InverterHub-*_GetFunctions-Vertrags, eigener,
+// einfacherer Vertrag: GetChannels()/ApplySetpoint()/AttachController()).
+// Siehe Discover()/getInverterEntry() -- wird bevorzugt vor InverterHub genutzt,
+// weil auf diesem System kein InverterHub installiert ist.
+define('GUID_GOODWEET', '{1C4B7E2A-8F3D-5A9C-4E1B-7D2F9A3C6E8B}');
+
+// GoodweET ApplySetpoint()-Intents (Abstraktion ueber dem rohen Goodwe-
+// Register 47511, siehe GoodweET/GoodweRegisterMap::INTENT_TO_MODE)
+define('GWET_INTENT_AUTO',         0);
+define('GWET_INTENT_PV_SELFUSE',   1);
+define('GWET_INTENT_GRID_CHARGE',  2);
+define('GWET_INTENT_DISCHARGE',    3);
+define('GWET_INTENT_EXPORT',       4);
+define('GWET_INTENT_STANDBY',      5);
+
 class EMS extends IPSModule
 {
     // ----------------------------------------------------------------
@@ -245,6 +261,14 @@ class EMS extends IPSModule
             $this->SetTimerInterval('EMS_UpdateTimer', $interval * 1000);
             $this->SetStatus(102);
             $this->emsLog(EMS_LOG_BASIC, 'EMS gestartet, Intervall: ' . $interval . 's');
+
+            // GoodweET als steuernde Instanz eintragen (reine Buchfuehrung,
+            // GWET_ApplySetpoint erzwingt das nicht -- siehe Discover()).
+            if (function_exists('GWET_AttachController')) {
+                foreach (IPS_GetInstanceListByModuleID(GUID_GOODWEET) as $gwetId) {
+                    GWET_AttachController($gwetId, $this->InstanceID);
+                }
+            }
         } else {
             $this->SetTimerInterval('EMS_UpdateTimer', 0);
             $this->SetStatus(104);
@@ -304,7 +328,7 @@ class EMS extends IPSModule
                     ),
                     array(
                         'type'    => 'Label',
-                        'caption' => '• Steuerung läuft jetzt über die automatisch gefundenen Partnermodule (InverterHub/ChargerHub) statt über die alten, manuell zu verknüpfenden Felder unten in "Wechselrichter & PV"/"Wallboxen" — diese bleiben nur noch als Fallback bestehen, wenn kein Partnermodul gefunden wird.'
+                        'caption' => '• Steuerung läuft jetzt über die automatisch gefundenen Partnermodule (GoodweET/ChargerHub, InverterHub als Fallback) statt über die alten, manuell zu verknüpfenden Felder unten in "Wechselrichter & PV"/"Wallboxen" — diese bleiben nur noch als Fallback bestehen, wenn kein Partnermodul gefunden wird.'
                     ),
                     array(
                         'type'    => 'Button',
@@ -403,6 +427,20 @@ class EMS extends IPSModule
     {
         $partners = array();
 
+        // GoodweET hat einen eigenen, einfacheren Snapshot-Vertrag (kein
+        // GetFunctions mit Variablen-IDs, sondern direkt aktuelle Messwerte)
+        // -- deshalb hier separat statt ueber discoverContract().
+        $partners['goodweet'] = array();
+        if (function_exists('GWET_GetChannels')) {
+            foreach (IPS_GetInstanceListByModuleID(GUID_GOODWEET) as $id) {
+                $data = json_decode(GWET_GetChannels($id), true);
+                if (is_array($data)) {
+                    $data['instanceID'] = $id;
+                    $partners['goodweet'][] = $data;
+                }
+            }
+        }
+
         $partners['inverterhub'] = $this->discoverContract(GUID_INVERTERHUB, 'IHUB_GetFunctions');
         $partners['meterhub']    = $this->discoverContract(GUID_METERHUB,    'MHUB_GetFunctions');
         $partners['chargerhub']  = $this->discoverContract(GUID_CHARGERHUB,  'CHUB_GetFunctions');
@@ -427,7 +465,8 @@ class EMS extends IPSModule
         $this->WriteAttributeString('PartnerCache', json_encode($partners));
 
         $summary = sprintf(
-            'InverterHub=%d MeterHub=%d ChargerHub=%d HeishaMon=%d Tessie=%d Tibber=%d',
+            'GoodweET=%d InverterHub=%d MeterHub=%d ChargerHub=%d HeishaMon=%d Tessie=%d Tibber=%d',
+            count($partners['goodweet']),
             count($partners['inverterhub']), count($partners['meterhub']),
             count($partners['chargerhub']),  count($partners['heishamon']),
             count($partners['tessie']),      count($partners['tibber'])
@@ -521,8 +560,64 @@ class EMS extends IPSModule
     private function getInverterEntry()
     {
         $partners = $this->GetPartners();
-        $list = (array)($partners['inverterhub'] ?? array());
-        return !empty($list) ? $list[0] : null;
+
+        // Bevorzugt GoodweET (Dietmars konsolidierter, tatsaechlich live
+        // laufender WR-Treiber auf diesem System). InverterHub (generischer
+        // NRG-Stack-Vertrag) nur als Fallback, falls auf einem anderen
+        // Verbund-System InverterHub statt GoodweET installiert ist.
+        $gwet = (array)($partners['goodweet'] ?? array());
+        if (!empty($gwet)) {
+            $g = $gwet[0];
+            return array(
+                'source'       => 'goodweet',
+                'instanceID'   => $g['instanceID'],
+                'pv_total_w'   => $g['pv_total']   ?? 0,
+                'grid_total_w' => $g['grid_total'] ?? 0,
+                'wr_total_w'   => $g['wr_total']   ?? 0,
+                'bat_pow_w'    => $g['bat_power']  ?? 0,
+                'soc'          => $g['soc']        ?? 0,
+            );
+        }
+
+        $ihub = (array)($partners['inverterhub'] ?? array());
+        if (!empty($ihub)) {
+            $i = $ihub[0];
+            return array(
+                'source'           => 'inverterhub',
+                'instanceID'       => $i['instanceID'],
+                'controlAuthority' => $i['controlAuthority'] ?? 'none',
+                'controllable'     => $i['controllable']     ?? false,
+                'pvPowerID'        => $i['pvPowerID']         ?? 0,
+                'gridPowerID'      => $i['gridPowerID']       ?? 0,
+                'acPowerID'        => $i['acPowerID']         ?? 0,
+                'batPowerID'       => $i['batPowerID']        ?? 0,
+                'socID'            => $i['socID']             ?? 0,
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * GoodweET kennt keine ApplySetpoint()-Modi 1:1 zum internen GW_MODE_*
+     * (das sind die rohen Goodwe-Register-47511-Werte) -- stattdessen eine
+     * kleinere Intent-Abstraktion (GoodweRegisterMap::INTENT_*). Mapping
+     * hier zentral, damit optimize()/applyDecision() unveraendert bleiben.
+     */
+    private function gwModeToGwetIntent($mode)
+    {
+        static $map = null;
+        if ($map === null) {
+            $map = array(
+                GW_MODE_AUTO       => GWET_INTENT_AUTO,
+                GW_MODE_CHARGE_PV  => GWET_INTENT_PV_SELFUSE,
+                GW_MODE_AC_IMPORT  => GWET_INTENT_GRID_CHARGE,
+                GW_MODE_DISCHARGE  => GWET_INTENT_DISCHARGE,
+                GW_MODE_AC_EXPORT  => GWET_INTENT_EXPORT,
+                GW_MODE_STANDBY    => GWET_INTENT_STANDBY,
+            );
+        }
+        return $map[$mode] ?? GWET_INTENT_AUTO;
     }
 
     /**
@@ -1110,8 +1205,13 @@ class EMS extends IPSModule
         // Fallback (z.B. fuer Anlagen ohne InverterHub).
         $inv = $this->getInverterEntry();
 
+        $fromGwet = ($inv !== null && $inv['source'] === 'goodweet');
+        $fromIhub = ($inv !== null && $inv['source'] === 'inverterhub');
+
         // Netz (SmartMeter)
-        if ($inv !== null && ($inv['gridPowerID'] ?? 0) > 0) {
+        if ($fromGwet) {
+            $s['grid_total_w'] = (float)$inv['grid_total_w'];
+        } elseif ($fromIhub && ($inv['gridPowerID'] ?? 0) > 0) {
             $s['grid_total_w'] = (float)$this->readDiscoveredVar($inv['gridPowerID'], 0);
         } else {
             $s['grid_total_w'] = (float)$this->readVar('VAR_SM_Total_Power', 0);
@@ -1121,24 +1221,32 @@ class EMS extends IPSModule
         $s['grid_l3_w']     = (float)$this->readVar('VAR_SM_L3_Power',    0);
 
         // PV
-        if ($inv !== null && ($inv['pvPowerID'] ?? 0) > 0) {
+        if ($fromGwet) {
+            $s['pv_total_w'] = (float)$inv['pv_total_w'];
+        } elseif ($fromIhub && ($inv['pvPowerID'] ?? 0) > 0) {
             $s['pv_total_w'] = (float)$this->readDiscoveredVar($inv['pvPowerID'], 0);
         } else {
             $s['pv_total_w'] = (float)$this->readVar('VAR_PV_Total_Power', 0);
         }
 
         // Wechselrichter (AC-Gesamtleistung)
-        if ($inv !== null && ($inv['acPowerID'] ?? 0) > 0) {
+        if ($fromGwet) {
+            $s['wr_total_w'] = (float)$inv['wr_total_w'];
+        } elseif ($fromIhub && ($inv['acPowerID'] ?? 0) > 0) {
             $s['wr_total_w'] = (float)$this->readDiscoveredVar($inv['acPowerID'], 0);
         } else {
             $s['wr_total_w'] = (float)$this->readVar('VAR_WR_Total_Power', 0);
         }
 
-        // Batterie — InverterHub liefert SOC/Leistung bereits stringübergreifend
-        // aggregiert, deshalb hier kein BAT_String_Count-Handling mehr noetig.
-        $s['bat_active'] = $this->ReadPropertyBoolean('BAT_Active')
-            || ($inv !== null && ($inv['batPowerID'] ?? 0) > 0);
-        if ($inv !== null && ($inv['socID'] ?? 0) > 0) {
+        // Batterie — GoodweET/InverterHub liefern SOC/Leistung bereits
+        // stringübergreifend aggregiert, deshalb hier kein BAT_String_Count-
+        // Handling mehr noetig.
+        $s['bat_active'] = $this->ReadPropertyBoolean('BAT_Active') || $fromGwet
+            || ($fromIhub && ($inv['batPowerID'] ?? 0) > 0);
+        if ($fromGwet) {
+            $s['bat_soc']   = (float)$inv['soc'];
+            $s['bat_pow_w'] = (float)$inv['bat_pow_w'];
+        } elseif ($fromIhub && ($inv['socID'] ?? 0) > 0) {
             $s['bat_soc']   = (float)$this->readDiscoveredVar($inv['socID'], 0);
             $s['bat_pow_w'] = (float)$this->readDiscoveredVar($inv['batPowerID'] ?? 0, 0);
         } elseif ($s['bat_active']) {
@@ -1441,7 +1549,14 @@ class EMS extends IPSModule
     private function setGoodweMode($mode, $powerW)
     {
         $inv = $this->getInverterEntry();
-        if ($inv !== null && function_exists('IHUB_RequestAction')) {
+
+        if ($inv !== null && $inv['source'] === 'goodweet' && function_exists('GWET_ApplySetpoint')) {
+            $intent = $this->gwModeToGwetIntent($mode);
+            GWET_ApplySetpoint($inv['instanceID'], $intent, (int)$powerW);
+            return;
+        }
+
+        if ($inv !== null && $inv['source'] === 'inverterhub' && function_exists('IHUB_RequestAction')) {
             $authority = $inv['controlAuthority'] ?? 'none';
             if ($authority === 'ems' && ($inv['controllable'] ?? false)) {
                 IHUB_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
@@ -1457,7 +1572,7 @@ class EMS extends IPSModule
             return;
         }
 
-        // Fallback: alte manuelle Variablenverknuepfung (kein InverterHub gefunden)
+        // Fallback: alte manuelle Variablenverknuepfung (kein Partnermodul gefunden)
         $varMode  = $this->ReadPropertyInteger('VAR_WR_EMS_Mode');
         $varPower = $this->ReadPropertyInteger('VAR_WR_EMS_Power');
         if ($varMode  > 0) { $this->writeVar($varMode, $mode); }

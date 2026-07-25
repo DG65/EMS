@@ -1,22 +1,23 @@
 # Changelog
 
 ## 0.5.0 (2026-07-25)
-- **Steuer-Migration Phase 1**: `setGoodweMode()` und `controlWallbox()` schreiben jetzt
-  bevorzugt über den NRG-Stack-Kontrollkanal (`IHUB_RequestAction`/`CHUB_RequestAction`) auf
-  die automatisch gefundenen InverterHub-/ChargerHub-Instanzen — nur wenn deren
-  `controlAuthority`/`managedBy` dem EMS die Schreibhoheit einräumt (Situation A). Die alten
-  manuellen `SelectVariable`-Felder ("Wechselrichter & PV" / "Wallboxen") werden dadurch
-  überflüssig; sie bleiben nur noch als Fallback bestehen, falls kein Partnermodul gefunden
-  wird. Grund: diese Felder waren nie befüllt worden (immer "Kein(e)"), weshalb das EMS trotz
-  aktivierter Anlage nie wirklich mit WR1 verbunden war.
-- `readState()` liest Netz-/PV-/Batteriewerte jetzt ebenfalls bevorzugt über die
-  InverterHub-Discovery (`gridPowerID`/`pvPowerID`/`acPowerID`/`socID`/`batPowerID`), gleiche
-  Fallback-Logik.
-- `Update()` ruft vor jedem Zyklus `Discover()` auf, damit der PartnerCache nie veraltet ist.
+- **Steuer-Migration Phase 1**: `setGoodweMode()`/`readState()` sprechen jetzt bevorzugt den
+  tatsächlich live laufenden WR-Treiber **GoodweET** (`GWET_GetChannels`/`GWET_ApplySetpoint`)
+  direkt an, statt über die alten, nie befüllten `SelectVariable`-Felder ("Wechselrichter & PV")
+  zu gehen — das war der Grund, warum das EMS trotz aktivierter Anlage nie wirklich mit WR1
+  verbunden war. `controlWallbox()` ebenso auf ChargerHub (`CHUB_RequestAction`, nur wenn
+  `managedBy` dem EMS die Hoheit einräumt — Situation A). InverterHub (`IHUB_*`) bleibt als
+  zweite Priorität im Code, falls auf einem anderen Verbund-System InverterHub statt GoodweET
+  installiert ist — auf diesem System laufen aktuell keine InverterHub-Instanzen. Die alten
+  manuellen Felder bleiben nur noch als letzter Fallback bestehen.
+- `Update()` ruft vor jedem Zyklus `Discover()` auf, damit der PartnerCache nie veraltet ist;
+  `ApplyChanges()` registriert die EMS-Instanz bei Aktivierung per `GWET_AttachController()`
+  als steuernde Instanz (reine Buchführung, GoodweET erzwingt das nicht).
 - Bekannte Lücke, bewusst nicht Teil dieser Version: die Goodwe-ECO-Zeitfenster
-  (`SetECOWindow`/`PlanNightCharge`/`PlanNegativePriceExport`) haben noch keinen Ident im
-  InverterHub-Kontrollkanal (`ctl_ems_mode` & Co. ja, Zeitfenster-Register nein) — dafür bleibt
-  vorerst nur die alte manuelle Variablenverknüpfung nutzbar, bis InverterHub das ergänzt.
+  (`SetECOWindow`/`PlanNightCharge`/`PlanNegativePriceExport`) haben weder in GoodweET noch in
+  InverterHub einen Schreibkanal (nur `ctl_ems_mode`/`ApplySetpoint`-Intents, keine
+  Zeitfenster-Register) — dafür bleibt vorerst nur die alte manuelle Variablenverknüpfung
+  nutzbar, bis GoodweET das ergänzt.
 
 ## 0.4.1 (2026-07-25)
 - Eigene Formular-Konvention nachgerüstet (war bisher übersehen worden, obwohl an alle
