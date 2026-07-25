@@ -176,10 +176,12 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('VAR_TIB_PT15M_Tomorrow',   0);
         $this->RegisterPropertyInteger('VAR_TIB_PT60M_Today',      0);
         $this->RegisterPropertyInteger('VAR_TIB_Ahead_15M',        0);
-        $this->RegisterPropertyFloat(  'TIB_Threshold_Charge',     15.0);
-        $this->RegisterPropertyFloat(  'TIB_Threshold_Discharge',  25.0);
-        $this->RegisterPropertyFloat(  'TIB_Threshold_WB',         20.0);
-        $this->RegisterPropertyFloat(  'TIB_Threshold_Export',     20.0);
+        // Einheit EUR/kWh (nicht ct/kWh) -- passend zu Tibbers CurrentPrice-Vertrag,
+        // siehe readState()/tib_feed-Fallback und SUITE.md-Historie 25.07.2026.
+        $this->RegisterPropertyFloat(  'TIB_Threshold_Charge',     0.15);
+        $this->RegisterPropertyFloat(  'TIB_Threshold_Discharge',  0.25);
+        $this->RegisterPropertyFloat(  'TIB_Threshold_WB',         0.20);
+        $this->RegisterPropertyFloat(  'TIB_Threshold_Export',     0.20);
 
         // ── Solarspitzengesetz (negative Preise) ───────────────────
         $this->RegisterPropertyBoolean('NEG_PRICE_Active',       false);
@@ -204,7 +206,7 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('OPT_Weight_Selfuse',       70);
         $this->RegisterPropertyInteger('OPT_Hysteresis_SOC',       3);
         $this->RegisterPropertyInteger('OPT_Hysteresis_Power',     200);
-        $this->RegisterPropertyFloat(  'OPT_Hysteresis_Price',     1.0);
+        $this->RegisterPropertyFloat(  'OPT_Hysteresis_Price',     0.01);
         $this->RegisterPropertyInteger('OPT_Cooldown_Sec',         60);
         $this->RegisterPropertyInteger('OPT_Planning_Horizon_H',   24);
 
@@ -218,7 +220,7 @@ class EMS extends IPSModule
         $this->RegisterVariableFloat(  'EMS_HousePower',   'Hausverbrauch (W)',       '', 70);
         $this->RegisterVariableFloat(  'EMS_WB1Power',     'Wallbox 1 Leistung (W)', '', 80);
         $this->RegisterVariableFloat(  'EMS_WB2Power',     'Wallbox 2 Leistung (W)', '', 90);
-        $this->RegisterVariableFloat(  'EMS_TibberPrice',  'Tibber Preis (ct/kWh)',  '',100);
+        $this->RegisterVariableFloat(  'EMS_TibberPrice',  'Tibber Preis (EUR/kWh)', '',100);
         $this->RegisterVariableBoolean('EMS_GridRewards',  'Grid Rewards aktiv',     '',110);
         $this->RegisterVariableString( 'EMS_LastAction',   'Letzte Aktion',          '',120);
         $this->RegisterVariableString( 'EMS_Status',       'Status',                 '',130);
@@ -1287,7 +1289,7 @@ class EMS extends IPSModule
         $s['tib_active']    = $this->ReadPropertyBoolean('TIBBER_Active');
         $s['tib_price']     = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Price',       0)     : 0.0;
         $s['tib_level']     = $s['tib_active'] ? (int)  $this->readVar('VAR_TIB_Level',       2)     : 2;
-        $s['tib_feed']      = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Feed_Tariff', 18.36) : 18.36;
+        $s['tib_feed']      = $s['tib_active'] ? (float)$this->readVar('VAR_TIB_Feed_Tariff', 0.1836) : 0.1836;
 
         // PV Forecast
         $s['fc_active']     = $this->ReadPropertyBoolean('FORECAST_Active');

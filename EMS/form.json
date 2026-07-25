@@ -833,7 +833,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_Price",
-                    "caption": "Aktueller Strompreis (ct/kWh)"
+                    "caption": "Aktueller Strompreis (EUR/kWh, z.B. Tibber CurrentPrice)"
                 },
                 {
                     "type": "SelectVariable",
@@ -843,7 +843,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_Feed_Tariff",
-                    "caption": "Einspeisevergütung (ct/kWh)"
+                    "caption": "Einspeisevergütung (EUR/kWh)"
                 },
                 {
                     "type": "SelectVariable",
@@ -872,38 +872,38 @@
                 {
                     "type": "NumberSpinner",
                     "name": "TIB_Threshold_Charge",
-                    "caption": "Preisschwelle Netz→Batterie laden (ct/kWh)",
+                    "caption": "Preisschwelle Netz→Batterie laden (EUR/kWh)",
                     "minimum": 0,
-                    "maximum": 100,
-                    "digits": 2,
-                    "suffix": " ct"
+                    "maximum": 1,
+                    "digits": 4,
+                    "suffix": " €"
                 },
                 {
                     "type": "NumberSpinner",
                     "name": "TIB_Threshold_Discharge",
-                    "caption": "Preisschwelle Batterie→Haus entladen (ct/kWh)",
+                    "caption": "Preisschwelle Batterie→Haus entladen (EUR/kWh)",
                     "minimum": 0,
-                    "maximum": 100,
-                    "digits": 2,
-                    "suffix": " ct"
+                    "maximum": 1,
+                    "digits": 4,
+                    "suffix": " €"
                 },
                 {
                     "type": "NumberSpinner",
                     "name": "TIB_Threshold_WB",
-                    "caption": "Preisschwelle Fahrzeugladung (ct/kWh)",
+                    "caption": "Preisschwelle Fahrzeugladung (EUR/kWh)",
                     "minimum": 0,
-                    "maximum": 100,
-                    "digits": 2,
-                    "suffix": " ct"
+                    "maximum": 1,
+                    "digits": 4,
+                    "suffix": " €"
                 },
                 {
                     "type": "NumberSpinner",
                     "name": "TIB_Threshold_Export",
-                    "caption": "Preisschwelle Export ins Netz (ct/kWh)",
+                    "caption": "Preisschwelle Export ins Netz (EUR/kWh)",
                     "minimum": 0,
-                    "maximum": 100,
-                    "digits": 2,
-                    "suffix": " ct"
+                    "maximum": 1,
+                    "digits": 4,
+                    "suffix": " €"
                 }
             ]
         },
@@ -1047,11 +1047,11 @@
                 {
                     "type": "NumberSpinner",
                     "name": "OPT_Hysteresis_Price",
-                    "caption": "Preis-Hysterese (ct/kWh)",
+                    "caption": "Preis-Hysterese (EUR/kWh)",
                     "minimum": 0,
-                    "maximum": 5,
-                    "digits": 2,
-                    "suffix": " ct"
+                    "maximum": 0.05,
+                    "digits": 4,
+                    "suffix": " €"
                 },
                 {
                     "type": "NumberSpinner",
