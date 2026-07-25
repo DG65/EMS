@@ -49,6 +49,11 @@ define('GUID_HEISHAMON',     '{1919151A-3C0F-4C09-B906-291638EC1469}');
 define('GUID_TESSIEVEHICLE', '{3F1F7E31-8BA0-4B8F-9B62-47DAD7A0B6C9}');
 define('GUID_TIBBERGRIDREWARD', '{E92F62F4-88A6-4C6E-9F0D-E76C3B1C9A01}');
 
+// PV-Erzeugungsprognose (PVF_GetForecast-Vertrag: 96 15-Min-Slots p10/p50/p90
+// in Watt, offset 0=heute/1=morgen) -- ersetzt die alte VAR_FC_JSON-Property,
+// siehe parseForecastNextHours()/parseForecastForSlots().
+define('GUID_PVFORECAST', '{257DD4E8-9705-462E-89FC-56D0A1038353}');
+
 // GoodweET: Dietmars konsolidierter, tatsaechlich live laufender WR-Treiber
 // (nicht Teil des generischen InverterHub-*_GetFunctions-Vertrags, eigener,
 // einfacherer Vertrag: GetChannels()/ApplySetpoint()/AttachController()).
@@ -644,6 +649,34 @@ class EMS extends IPSModule
      * Liest eine Discovery-Variablen-ID sicher aus (analog readVar(), aber
      * ohne Property-Indirektion — die ID kommt direkt aus dem PartnerCache).
      */
+    /**
+     * Erste installierte PVF-Prognoseinstanz (fuer PVF_GetForecast). Bewusst
+     * nicht Teil des PartnerCache/Discover() -- die Prognose ist kein
+     * Steuer-/Situations-Vertrag, wird aber genauso "einfach das erste
+     * gefundene Modul" gehandhabt wie getInverterEntry().
+     */
+    private function getPvfInstance()
+    {
+        if (!function_exists('PVF_GetForecast')) { return 0; }
+        $list = IPS_GetInstanceListByModuleID(GUID_PVFORECAST);
+        return !empty($list) ? $list[0] : 0;
+    }
+
+    /**
+     * Baut ein zusammenhaengendes 192-Slot-Array (heute+morgen, wie bei den
+     * Tibber-PT15M-Preisen) aus PVF_GetForecast's p50-Median-Schaetzung in Watt.
+     */
+    private function getPvfSlotsWatt()
+    {
+        $pvfId = $this->getPvfInstance();
+        if ($pvfId <= 0) { return array(); }
+        $today    = PVF_GetForecast($pvfId, 0);
+        $tomorrow = PVF_GetForecast($pvfId, 1);
+        $todayP50    = $today['p50']    ?? array_fill(0, 96, 0.0);
+        $tomorrowP50 = $tomorrow['p50'] ?? array_fill(0, 96, 0.0);
+        return array_merge($todayP50, $tomorrowP50); // Index 0-191
+    }
+
     private function readDiscoveredVar($varId, $default)
     {
         if ($varId <= 0 || !IPS_VariableExists($varId)) { return $default; }
@@ -1015,6 +1048,17 @@ class EMS extends IPSModule
      */
     private function parseForecastForSlots($fromSlot, $toSlot)
     {
+        $pvfSlots = $this->getPvfSlotsWatt();
+        if (!empty($pvfSlots)) {
+            $sumWh = 0.0;
+            for ($slot = $fromSlot; $slot <= $toSlot; $slot++) {
+                if (!isset($pvfSlots[$slot])) { continue; }
+                $sumWh += (float)$pvfSlots[$slot] * 0.25; // 15-Min-Slot -> Wh
+            }
+            return $sumWh / 1000.0; // kWh
+        }
+
+        // Fallback: alte manuelle VAR_FC_JSON-Verknuepfung
         $varId = $this->ReadPropertyInteger('VAR_FC_JSON');
         if ($varId <= 0 || !IPS_VariableExists($varId)) { return 0.0; }
         $json = GetValue($varId);
@@ -1163,6 +1207,20 @@ class EMS extends IPSModule
      */
     private function parseForecastNextHours($hours)
     {
+        $pvfSlots = $this->getPvfSlotsWatt();
+        if (!empty($pvfSlots)) {
+            $nowSlot   = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
+            $numSlots  = (int)ceil($hours * 4);
+            $sumWh     = 0.0;
+            for ($i = 0; $i < $numSlots; $i++) {
+                $slot = $nowSlot + $i;
+                if (!isset($pvfSlots[$slot])) { break; }
+                $sumWh += (float)$pvfSlots[$slot] * 0.25; // 15-Min-Slot -> Wh
+            }
+            return $sumWh / 1000.0; // kWh
+        }
+
+        // Fallback: alte manuelle VAR_FC_JSON-Verknuepfung
         $varId = $this->ReadPropertyInteger('VAR_FC_JSON');
         if ($varId <= 0 || !IPS_VariableExists($varId)) { return 0.0; }
 
@@ -1293,7 +1351,16 @@ class EMS extends IPSModule
 
         // PV Forecast
         $s['fc_active']     = $this->ReadPropertyBoolean('FORECAST_Active');
-        $s['fc_today_kwh']  = $s['fc_active'] ? (float)$this->readVar('VAR_FC_Today',    0) : 0.0;
+        $s['fc_today_kwh']  = 0.0;
+        if ($s['fc_active']) {
+            $pvfId = $this->getPvfInstance();
+            if ($pvfId > 0) {
+                $today = PVF_GetForecast($pvfId, 0);
+                $s['fc_today_kwh'] = (float)($today['kwh'] ?? 0.0);
+            } else {
+                $s['fc_today_kwh'] = (float)$this->readVar('VAR_FC_Today', 0);
+            }
+        }
 
         // PV Forecast: stündliche Vorschau für Planungshorizont
         $s['fc_next_kwh']   = 0.0;
