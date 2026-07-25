@@ -3,9 +3,9 @@
     "author": "DG65",
     "name": "EMS",
     "url": "https://github.com/DG65/NRGEMS",
-    "version": "0.4.1",
-    "build": 5,
-    "date": 1753488000,
+    "version": "0.5.0",
+    "build": 6,
+    "date": 1784937600,
     "compatibility": {
         "version": "9.0"
     }

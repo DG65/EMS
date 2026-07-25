@@ -39,7 +39,7 @@ define('EMS_LOG_VERBOSE',     2);
 
 // Formular-Konvention (siehe EMS/SUITE.md "Einheitliche Formular-Optik"):
 // Was-ist-Neu-Panel ist versionsscharf dismissible, Referenzmuster InverterHub.
-define('EMS_NEWS_VERSION', '0.4.0');
+define('EMS_NEWS_VERSION', '0.5.0');
 
 // NRG-Stack Partnermodul-GUIDs (fuer automatische Discovery, siehe discoverPartners())
 define('GUID_CHARGERHUB',    '{9256C34E-5CFD-4F37-8BFE-E65390EBB37C}');
@@ -303,6 +303,10 @@ class EMS extends IPSModule
                         'caption' => '• Neu: Solarspitzengesetz-Speicher-Vorentladung vor Negativpreis-Fenstern (eigenes Panel weiter unten).'
                     ),
                     array(
+                        'type'    => 'Label',
+                        'caption' => '• Steuerung läuft jetzt über die automatisch gefundenen Partnermodule (InverterHub/ChargerHub) statt über die alten, manuell zu verknüpfenden Felder unten in "Wechselrichter & PV"/"Wallboxen" — diese bleiben nur noch als Fallback bestehen, wenn kein Partnermodul gefunden wird.'
+                    ),
+                    array(
                         'type'    => 'Button',
                         'caption' => 'Verstanden – nicht mehr anzeigen',
                         'onClick' => 'EMS_AckNews($id);'
@@ -362,6 +366,7 @@ class EMS extends IPSModule
         }
 
         try {
+            $this->Discover(); // Partnercache je Zyklus auffrischen, siehe getInverterEntry()/getWritableChargers()
             $state      = $this->readState();
             $this->updateStatusVars($state);
             $decision = $this->optimize($state);
@@ -505,6 +510,47 @@ class EMS extends IPSModule
         $json = $this->ReadAttributeString('PartnerCache');
         $data = json_decode($json, true);
         return is_array($data) ? $data : array();
+    }
+
+    /**
+     * Liefert den zuletzt gefundenen InverterHub-Discovery-Eintrag (aktuell
+     * genau ein WR im Verbund, WR1). Wird sowohl fuers Lesen (readState())
+     * als auch fuers Schreiben (setGoodweMode()) genutzt — ersetzt die alte
+     * manuelle Verknuepfung ueber VAR_SM_, VAR_PV_, VAR_BAT und VAR_WR_EMS_.
+     */
+    private function getInverterEntry()
+    {
+        $partners = $this->GetPartners();
+        $list = (array)($partners['inverterhub'] ?? array());
+        return !empty($list) ? $list[0] : null;
+    }
+
+    /**
+     * Alle ChargerHub-Instanzen, die das EMS ansteuern darf (managedBy
+     * none/ems -> Situation A). Ersetzt die alte manuelle WB{n}_Instance-
+     * Verknuepfung auf die dritte-Partei-GO-eCharger-Instanz.
+     */
+    private function getWritableChargers()
+    {
+        $partners = $this->GetPartners();
+        $result = array();
+        foreach ((array)($partners['chargerhub'] ?? array()) as $chg) {
+            $managedBy = $chg['managedBy'] ?? 'none';
+            if (in_array($managedBy, array('none', 'ems'), true)) {
+                $result[] = $chg;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Liest eine Discovery-Variablen-ID sicher aus (analog readVar(), aber
+     * ohne Property-Indirektion — die ID kommt direkt aus dem PartnerCache).
+     */
+    private function readDiscoveredVar($varId, $default)
+    {
+        if ($varId <= 0 || !IPS_VariableExists($varId)) { return $default; }
+        return GetValue($varId);
     }
 
     // ----------------------------------------------------------------
@@ -1058,21 +1104,44 @@ class EMS extends IPSModule
     {
         $s = array();
 
+        // Bevorzugt: automatisch gefundener WR aus der NRG-Stack-Discovery
+        // (siehe Discover()/getInverterEntry()). Nur wenn kein Partnermodul
+        // gefunden wird, greift die alte manuelle Variablenverknuepfung als
+        // Fallback (z.B. fuer Anlagen ohne InverterHub).
+        $inv = $this->getInverterEntry();
+
         // Netz (SmartMeter)
-        $s['grid_total_w']  = (float)$this->readVar('VAR_SM_Total_Power', 0);
+        if ($inv !== null && ($inv['gridPowerID'] ?? 0) > 0) {
+            $s['grid_total_w'] = (float)$this->readDiscoveredVar($inv['gridPowerID'], 0);
+        } else {
+            $s['grid_total_w'] = (float)$this->readVar('VAR_SM_Total_Power', 0);
+        }
         $s['grid_l1_w']     = (float)$this->readVar('VAR_SM_L1_Power',    0);
         $s['grid_l2_w']     = (float)$this->readVar('VAR_SM_L2_Power',    0);
         $s['grid_l3_w']     = (float)$this->readVar('VAR_SM_L3_Power',    0);
 
         // PV
-        $s['pv_total_w']    = (float)$this->readVar('VAR_PV_Total_Power', 0);
+        if ($inv !== null && ($inv['pvPowerID'] ?? 0) > 0) {
+            $s['pv_total_w'] = (float)$this->readDiscoveredVar($inv['pvPowerID'], 0);
+        } else {
+            $s['pv_total_w'] = (float)$this->readVar('VAR_PV_Total_Power', 0);
+        }
 
-        // Wechselrichter
-        $s['wr_total_w']    = (float)$this->readVar('VAR_WR_Total_Power', 0);
+        // Wechselrichter (AC-Gesamtleistung)
+        if ($inv !== null && ($inv['acPowerID'] ?? 0) > 0) {
+            $s['wr_total_w'] = (float)$this->readDiscoveredVar($inv['acPowerID'], 0);
+        } else {
+            $s['wr_total_w'] = (float)$this->readVar('VAR_WR_Total_Power', 0);
+        }
 
-        // Batterie
-        $s['bat_active']    = $this->ReadPropertyBoolean('BAT_Active');
-        if ($s['bat_active']) {
+        // Batterie — InverterHub liefert SOC/Leistung bereits stringübergreifend
+        // aggregiert, deshalb hier kein BAT_String_Count-Handling mehr noetig.
+        $s['bat_active'] = $this->ReadPropertyBoolean('BAT_Active')
+            || ($inv !== null && ($inv['batPowerID'] ?? 0) > 0);
+        if ($inv !== null && ($inv['socID'] ?? 0) > 0) {
+            $s['bat_soc']   = (float)$this->readDiscoveredVar($inv['socID'], 0);
+            $s['bat_pow_w'] = (float)$this->readDiscoveredVar($inv['batPowerID'] ?? 0, 0);
+        } elseif ($s['bat_active']) {
             $soc1           = (float)$this->readVar('VAR_BAT1_SOC',   0);
             $pow1           = (float)$this->readVar('VAR_BAT1_Power', 0);
             if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
@@ -1360,18 +1429,72 @@ class EMS extends IPSModule
         $this->SetValue('EMS_Status',     'OK: ' . $d['reason']);
     }
 
+    /**
+     * Schreibt den Goodwe-EMS-Modus/-Leistungswert. Bevorzugt den
+     * NRG-Stack-Kontrollkanal (IHUB_RequestAction auf den automatisch
+     * gefundenen WR, nur wenn dessen controlAuthority == 'ems' ist —
+     * Situation A). GW_MODE_*-Konstanten entsprechen 1:1 dem Goodwe-
+     * Register 47511, das sowohl das alte VAR_WR_EMS_Mode als auch
+     * InverterHubs ctl_ems_mode adressiert, deshalb keine Modus-Uebersetzung
+     * noetig. Fallback: alte manuelle Variablenverknuepfung.
+     */
     private function setGoodweMode($mode, $powerW)
     {
+        $inv = $this->getInverterEntry();
+        if ($inv !== null && function_exists('IHUB_RequestAction')) {
+            $authority = $inv['controlAuthority'] ?? 'none';
+            if ($authority === 'ems' && ($inv['controllable'] ?? false)) {
+                IHUB_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
+                if ($powerW > 0) {
+                    IHUB_RequestAction($inv['instanceID'], 'ctl_ems_power', $powerW);
+                }
+                return;
+            }
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'setGoodweMode: WR #%d hat Steuerhoheit "%s" (nicht "ems") oder ist nicht steuerbar — EMS greift nicht ein (Situation B)',
+                $inv['instanceID'], $authority
+            ));
+            return;
+        }
+
+        // Fallback: alte manuelle Variablenverknuepfung (kein InverterHub gefunden)
         $varMode  = $this->ReadPropertyInteger('VAR_WR_EMS_Mode');
         $varPower = $this->ReadPropertyInteger('VAR_WR_EMS_Power');
         if ($varMode  > 0) { $this->writeVar($varMode, $mode); }
         if ($varPower > 0 && $powerW > 0) { $this->writeVar($varPower, $powerW); }
     }
 
+    /**
+     * Wallbox $num (1 oder 2) freigeben/sperren. Bevorzugt den NRG-Stack-
+     * ChargerHub-Kontrollkanal (nur Instanzen mit managedBy none/ems,
+     * siehe getWritableChargers() — Situation A). Die alte Property
+     * WB{n}_Instance dient nur noch als optionale Zuordnung, WELCHER
+     * gefundene Lader "WB1" bzw. "WB2" ist; ist sie leer, wird einfach
+     * der n-te automatisch gefundene, EMS-steuerbare Lader genommen.
+     * Fallback ohne ChargerHub: alte direkte GO-eCharger-Steuerung.
+     */
     private function controlWallbox($num, $enable)
     {
-        $instance = $this->ReadPropertyInteger('WB' . $num . '_Instance');
-        if ($instance <= 0) { return; }
+        $configuredInstance = $this->ReadPropertyInteger('WB' . $num . '_Instance');
+        $chargers = $this->getWritableChargers();
+        $entry = null;
+        foreach ($chargers as $c) {
+            if ($configuredInstance > 0 && ($c['instanceID'] ?? 0) === $configuredInstance) {
+                $entry = $c;
+                break;
+            }
+        }
+        if ($entry === null && $configuredInstance <= 0 && isset($chargers[$num - 1])) {
+            $entry = $chargers[$num - 1];
+        }
+
+        if ($entry !== null && function_exists('CHUB_RequestAction')) {
+            $this->controlWallboxViaChargerHub($num, $entry, $enable);
+            return;
+        }
+
+        // Fallback: alte direkte GO-eCharger-Steuerung ueber manuelle Instanz-Property
+        if ($configuredInstance <= 0 || !function_exists('GOeCharger_SetMode')) { return; }
 
         $lastSwitch = $this->ReadAttributeInteger('LastWB' . $num . 'Switch');
         $cooldown   = $this->ReadPropertyInteger('WB_Cooldown_Sec');
@@ -1384,14 +1507,46 @@ class EMS extends IPSModule
 
         if ($enable && !$isActive) {
             $maxPower = $this->ReadPropertyInteger('WB' . $num . '_Max_Power_W');
-            GOeCharger_SetMode($instance, 2);
-            GOeCharger_SetCurrentChargingWatt($instance, $maxPower);
+            GOeCharger_SetMode($configuredInstance, 2);
+            GOeCharger_SetCurrentChargingWatt($configuredInstance, $maxPower);
             $this->WriteAttributeInteger('LastWB' . $num . 'Switch', time());
             $this->emsLog(EMS_LOG_BASIC, 'WB' . $num . ' freigegeben (' . $maxPower . ' W)');
         } elseif (!$enable && $isActive) {
-            GOeCharger_SetMode($instance, 1);
+            GOeCharger_SetMode($configuredInstance, 1);
             $this->WriteAttributeInteger('LastWB' . $num . 'Switch', time());
             $this->emsLog(EMS_LOG_BASIC, 'WB' . $num . ' gesperrt');
+        }
+    }
+
+    private function controlWallboxViaChargerHub($num, $entry, $enable)
+    {
+        $instance = $entry['instanceID'] ?? 0;
+        if ($instance <= 0) { return; }
+
+        $lastSwitch = $this->ReadAttributeInteger('LastWB' . $num . 'Switch');
+        $cooldown   = $this->ReadPropertyInteger('WB_Cooldown_Sec');
+        if ((time() - $lastSwitch) < $cooldown) {
+            $this->emsLog(EMS_LOG_VERBOSE, 'WB' . $num . ': Cooldown aktiv');
+            return;
+        }
+
+        $chargeEnableID = $entry['chargeEnableID'] ?? 0;
+        $isActive = ($chargeEnableID > 0 && IPS_VariableExists($chargeEnableID)) ? (bool)GetValue($chargeEnableID) : false;
+
+        if ($enable && !$isActive) {
+            $maxCurrentA = (int)($entry['maxCurrent'] ?? 16);
+            $configuredMaxW = $this->ReadPropertyInteger('WB' . $num . '_Max_Power_W');
+            if ($configuredMaxW > 0) {
+                $maxCurrentA = min($maxCurrentA, max(6, (int)round($configuredMaxW / 230)));
+            }
+            CHUB_RequestAction($instance, 'ctl_curr_limit', $maxCurrentA);
+            CHUB_RequestAction($instance, 'ctl_enable', true);
+            $this->WriteAttributeInteger('LastWB' . $num . 'Switch', time());
+            $this->emsLog(EMS_LOG_BASIC, 'WB' . $num . ' (ChargerHub #' . $instance . ') freigegeben (' . $maxCurrentA . ' A)');
+        } elseif (!$enable && $isActive) {
+            CHUB_RequestAction($instance, 'ctl_enable', false);
+            $this->WriteAttributeInteger('LastWB' . $num . 'Switch', time());
+            $this->emsLog(EMS_LOG_BASIC, 'WB' . $num . ' (ChargerHub #' . $instance . ') gesperrt');
         }
     }
 
