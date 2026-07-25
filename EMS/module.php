@@ -37,6 +37,10 @@ define('EMS_LOG_OFF',         0);
 define('EMS_LOG_BASIC',       1);
 define('EMS_LOG_VERBOSE',     2);
 
+// Formular-Konvention (siehe EMS/SUITE.md "Einheitliche Formular-Optik"):
+// Was-ist-Neu-Panel ist versionsscharf dismissible, Referenzmuster InverterHub.
+define('EMS_NEWS_VERSION', '0.4.0');
+
 // NRG-Stack Partnermodul-GUIDs (fuer automatische Discovery, siehe discoverPartners())
 define('GUID_CHARGERHUB',    '{9256C34E-5CFD-4F37-8BFE-E65390EBB37C}');
 define('GUID_METERHUB',      '{BAB8E05C-9150-43B9-9F2B-E5215FA54F0A}');
@@ -219,6 +223,10 @@ class EMS extends IPSModule
         $this->RegisterAttributeString('PartnerCache', '{}');
         $this->RegisterVariableString('EMS_Partners', 'NRG-Stack Partnermodule', '', 5);
         $this->RegisterVariableString('EMS_Situation', 'Steuerhoheit (Situation A/B)', '', 6);
+
+        // ── Formular-Optik (Verbund-Konvention, siehe SUITE.md) ──────
+        $this->RegisterAttributeString('SeenNews', '');
+        $this->RegisterAttributeBoolean('ForumHintDismissed', false);
     }
 
     public function Destroy()
@@ -244,6 +252,103 @@ class EMS extends IPSModule
         }
 
         $this->SetValue('EMS_Active_State', $active);
+    }
+
+    // ----------------------------------------------------------------
+    //  Formular-Optik (Verbund-Konvention, siehe SUITE.md
+    //  "Einheitliche Formular-Optik"; Referenzimplementierung InverterHub)
+    // ----------------------------------------------------------------
+
+    public function GetConfigurationForm()
+    {
+        $form = json_decode(file_get_contents(__DIR__ . '/form.json'), true);
+
+        // 2. "Dokumentation & Hilfe" — eingeklappt, Versionsnummer hier.
+        // Zuerst eingefuegt, damit sie nach dem (optionalen) News-Panel-
+        // unshift direkt an Position 2 landet.
+        array_unshift($form['elements'], array(
+            'type'     => 'ExpansionPanel',
+            'caption'  => '📖 Dokumentation & Hilfe',
+            'expanded' => false,
+            'items'    => array(
+                array(
+                    'type'    => 'Label',
+                    'caption' => 'ℹ️ EMS Version ' . EMS_NEWS_VERSION . ' (Build ' . $this->getOwnBuild() . ')'
+                ),
+                array(
+                    'type'    => 'Label',
+                    'caption' => 'Koordiniert alle NRG-Stack-Module (InverterHub, MeterHub, ChargerHub, HeishaMon, Tessie, TibberGridRewards, StromGedacht, SteuerboxHub) über deren *_GetFunctions-Verträge. Details: https://github.com/DG65/EMS'
+                ),
+            )
+        ));
+
+        // 1. "Was ist Neu" — aufgeklappt, pro Version dismissible
+        if ($this->ReadAttributeString('SeenNews') !== EMS_NEWS_VERSION) {
+            array_unshift($form['elements'], array(
+                'type'     => 'ExpansionPanel',
+                'name'     => 'NewsPanel',
+                'caption'  => '🆕 Neu in Version ' . EMS_NEWS_VERSION,
+                'expanded' => true,
+                'items'    => array(
+                    array(
+                        'type'    => 'Label',
+                        'caption' => '• Automatische NRG-Stack-Partnermodul-Erkennung (EMS_Discover) — kein manuelles Verknüpfen von Variablen-IDs mehr nötig.'
+                    ),
+                    array(
+                        'type'    => 'Label',
+                        'caption' => '• Steuerhoheit je Gerät (Situation A/B): EMS erkennt automatisch, wo es schreiben darf und wo ein externer Akteur (Tibber, go-e Controller) bereits regelt.'
+                    ),
+                    array(
+                        'type'    => 'Label',
+                        'caption' => '• Neu: Solarspitzengesetz-Speicher-Vorentladung vor Negativpreis-Fenstern (eigenes Panel weiter unten).'
+                    ),
+                    array(
+                        'type'    => 'Button',
+                        'caption' => 'Verstanden – nicht mehr anzeigen',
+                        'onClick' => 'EMS_AckNews($id);'
+                    ),
+                )
+            ));
+        }
+
+        // 4. Symcon-Forum-Hinweis — nach den Haupteinstellungen, einmalig dismissible
+        if (!$this->ReadAttributeBoolean('ForumHintDismissed')) {
+            $form['elements'][] = array(
+                'type'  => 'RowLayout',
+                'name'  => 'ForumHint',
+                'items' => array(
+                    array(
+                        'type'    => 'Label',
+                        'caption' => '✏️ EMS ist Beta — Rückmeldungen im Symcon-Forum willkommen: (Thread folgt, sobald veröffentlicht)'
+                    ),
+                    array(
+                        'type'    => 'Button',
+                        'caption' => 'Nicht mehr anzeigen',
+                        'onClick' => 'EMS_DismissForumHint($id);'
+                    ),
+                )
+            );
+        }
+
+        return json_encode($form);
+    }
+
+    public function AckNews()
+    {
+        $this->WriteAttributeString('SeenNews', EMS_NEWS_VERSION);
+        $this->UpdateFormField('NewsPanel', 'visible', false);
+    }
+
+    public function DismissForumHint()
+    {
+        $this->WriteAttributeBoolean('ForumHintDismissed', true);
+        $this->UpdateFormField('ForumHint', 'visible', false);
+    }
+
+    private function getOwnBuild()
+    {
+        $lib = @IPS_GetLibrary('{90286A25-E6C9-4A66-BD4E-0CFB707C2C6C}');
+        return $lib['Build'] ?? '?';
     }
 
     // ----------------------------------------------------------------

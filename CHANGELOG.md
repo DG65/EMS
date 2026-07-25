@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1 (2026-07-25)
+- Eigene Formular-Konvention nachgerüstet (war bisher übersehen worden, obwohl an alle
+  anderen Module verteilt): "🆕 Was ist Neu" (aufgeklappt, pro Version dismissible),
+  "📖 Dokumentation & Hilfe" (eingeklappt, mit Versionsnummer), Symcon-Forum-Hinweis
+  (dismissible, Platzhalter bis der Forum-Post existiert).
+
 ## 0.4.0 (2026-07-25)
 - `EMS_PlanNegativePriceExport()`: Solarspitzengesetz-Strategie — schafft vor einem
   erwarteten Negativpreis-Fenster (aus der Tibber-PT15M-Preiskurve) rechtzeitig genug
