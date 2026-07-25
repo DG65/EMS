@@ -1608,7 +1608,7 @@ class EMS extends IPSModule
 
     /**
      * Schreibt den Goodwe-EMS-Modus/-Leistungswert. Bevorzugt den
-     * NRG-Stack-Kontrollkanal (IHUB_RequestAction auf den automatisch
+     * NRG-Stack-Kontrollkanal (IPS_RequestAction auf den automatisch
      * gefundenen WR, nur wenn dessen controlAuthority == 'ems' ist —
      * Situation A). GW_MODE_*-Konstanten entsprechen 1:1 dem Goodwe-
      * Register 47511, das sowohl das alte VAR_WR_EMS_Mode als auch
@@ -1625,12 +1625,16 @@ class EMS extends IPSModule
             return;
         }
 
-        if ($inv !== null && $inv['source'] === 'inverterhub' && function_exists('IHUB_RequestAction')) {
+        if ($inv !== null && $inv['source'] === 'inverterhub') {
             $authority = $inv['controlAuthority'] ?? 'none';
             if ($authority === 'ems' && ($inv['controllable'] ?? false)) {
-                IHUB_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
+                // RequestAction() ist ein IPSModule-Kernel-Methodenname und wird NIE als
+                // Prefix_RequestAction() exponiert -- der Kernel-Einstiegspunkt ist
+                // IPS_RequestAction($InstanceID, $Ident, $Value) (siehe ChargerHub-Befund
+                // 25.07.2026, gleiche Ursache bei InverterHub).
+                IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
                 if ($powerW > 0) {
-                    IHUB_RequestAction($inv['instanceID'], 'ctl_ems_power', $powerW);
+                    IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', $powerW);
                 }
                 return;
             }
@@ -1672,7 +1676,7 @@ class EMS extends IPSModule
             $entry = $chargers[$num - 1];
         }
 
-        if ($entry !== null && function_exists('CHUB_RequestAction')) {
+        if ($entry !== null) {
             $this->controlWallboxViaChargerHub($num, $entry, $enable);
             return;
         }
@@ -1723,12 +1727,15 @@ class EMS extends IPSModule
             if ($configuredMaxW > 0) {
                 $maxCurrentA = min($maxCurrentA, max(6, (int)round($configuredMaxW / 230)));
             }
-            CHUB_RequestAction($instance, 'ctl_curr_limit', $maxCurrentA);
-            CHUB_RequestAction($instance, 'ctl_enable', true);
+            // RequestAction() ist Kernel-reserviert, nie als Prefix_RequestAction()
+            // exponiert -- Einstiegspunkt ist IPS_RequestAction() (siehe ChargerHub-Befund
+            // 25.07.2026).
+            IPS_RequestAction($instance, 'ctl_curr_limit', $maxCurrentA);
+            IPS_RequestAction($instance, 'ctl_enable', true);
             $this->WriteAttributeInteger('LastWB' . $num . 'Switch', time());
             $this->emsLog(EMS_LOG_BASIC, 'WB' . $num . ' (ChargerHub #' . $instance . ') freigegeben (' . $maxCurrentA . ' A)');
         } elseif (!$enable && $isActive) {
-            CHUB_RequestAction($instance, 'ctl_enable', false);
+            IPS_RequestAction($instance, 'ctl_enable', false);
             $this->WriteAttributeInteger('LastWB' . $num . 'Switch', time());
             $this->emsLog(EMS_LOG_BASIC, 'WB' . $num . ' (ChargerHub #' . $instance . ') gesperrt');
         }

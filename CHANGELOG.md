@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1 (2026-07-25)
+- **Kritischer Fix Schreibpfad**: `IHUB_RequestAction`/`CHUB_RequestAction` existieren als
+  Funktionsnamen nie — `RequestAction()` ist ein IPSModule-Kernel-Methodenname, IP-Symcon
+  generiert dafür KEINE `Prefix_RequestAction()`-Wrapperfunktion (anders als bei normalen
+  öffentlichen Methoden). Der korrekte Einstiegspunkt ist `IPS_RequestAction($InstanceID,
+  $Ident, $Value)`. Betraf `setGoodweMode()` und `controlWallboxViaChargerHub()` — durch die
+  defensiven `function_exists()`-Prüfungen bisher ohne Fehler, aber auch ohne jede echte
+  Wirkung: Seit der heutigen Migration wurde nie tatsächlich geschrieben. Fund/Bestätigung:
+  ChargerHub-Session, 25.07.2026 (Commit 7b86242, zusätzlich fehlende
+  `VariableAction`-Verknüpfung dort behoben).
+
 ## 0.6.0 (2026-07-25)
 - **PV-Prognose-Migration**: `parseForecastNextHours()`/`parseForecastForSlots()` (genutzt
   von `optimize()` und `PlanNegativePriceExport()`) sprechen jetzt bevorzugt die echte
