@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 (2026-07-27)
+- **Neu**: `EMS_GetFederationHealth()` — verbundweite Statusaggregation über alle bei
+  `Discover()` gefundenen Partnerinstanzen (InverterHub/GoodweET, MeterHub, ChargerHub,
+  HeishaMon, Tessie, Tibber). Neue Statusvariable `EMS_FederationHealth` fasst zusammen,
+  wie viele Partnerinstanzen gesund sind (`InstanceStatus === 102`) und benennt auffällige
+  Instanzen mit Klartext-Status. Wird automatisch bei jedem `Discover()`-Lauf mit
+  aktualisiert. Hintergrund: ein manueller Rundruf über alle 12 Verbund-Sessions am
+  27.07.2026 hat gezeigt, dass es bisher keine zentrale Übersicht gab, ob der gesamte
+  Stack läuft — jedes Modul hatte höchstens seine eigene Ampel.
+
 ## 0.6.2 (2026-07-25)
 - **Kritischer Fix**: `setGoodweMode()` setzte nie `ctl_ems_enable` (Register 47505, der
   EMS-Hauptschalter am WR) — der Goodwe ignorierte dadurch jede `ctl_ems_mode`/

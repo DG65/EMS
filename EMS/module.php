@@ -246,6 +246,7 @@ class EMS extends IPSModule
         $this->RegisterAttributeString('PartnerCache', '{}');
         $this->RegisterVariableString('EMS_Partners', 'NRG-Stack Partnermodule', '', 5);
         $this->RegisterVariableString('EMS_Situation', 'Steuerhoheit (Situation A/B)', '', 6);
+        $this->RegisterVariableString('EMS_FederationHealth', 'Verbund-Gesundheit', '', 7);
 
         // ── Formular-Optik (Verbund-Konvention, siehe SUITE.md) ──────
         $this->RegisterAttributeString('SeenNews', '');
@@ -494,6 +495,8 @@ class EMS extends IPSModule
         );
         $this->SetValue('EMS_Situation', $situationSummary);
 
+        $this->GetFederationHealth();
+
         return $partners;
     }
 
@@ -556,6 +559,67 @@ class EMS extends IPSModule
         $json = $this->ReadAttributeString('PartnerCache');
         $data = json_decode($json, true);
         return is_array($data) ? $data : array();
+    }
+
+    /**
+     * Verbundweite Statusaggregation ueber alle bei Discover() gefundenen
+     * Partnerinstanzen (deckt genau die tatsaechlich vernetzten,
+     * kontrollrelevanten NRG-Stack-Module ab -- nicht jedes im Verbund
+     * existierende Modul, sondern die, mit denen EMS aktiv Vertraege
+     * austauscht). Liest je Instanz nur den nativen IP-Symcon-Status
+     * (IPS_GetInstance()['InstanceStatus']), keinen modul-eigenen Status-
+     * text -- das haelt die Methode robust gegen unterschiedliche
+     * *_GetFunctions-Vertragsformen. 102 gilt als gesund, alles andere
+     * (inkl. fehlender Instanz) als auffaellig.
+     */
+    public function GetFederationHealth()
+    {
+        $partners = $this->GetPartners();
+        $entries  = array();
+
+        foreach ($partners as $module => $list) {
+            if (!is_array($list)) {
+                continue;
+            }
+            foreach ($list as $entry) {
+                $id = isset($entry['instanceID']) ? (int)$entry['instanceID'] : 0;
+                if ($id <= 0) {
+                    continue;
+                }
+                $status  = IPS_InstanceExists($id) ? IPS_GetInstance($id)['InstanceStatus'] : 0;
+                $healthy = ($status === 102);
+                $entries[] = array(
+                    'module'     => $module,
+                    'instanceID' => $id,
+                    'label'      => IPS_InstanceExists($id) ? IPS_GetName($id) : '(geloescht)',
+                    'status'     => $status,
+                    'healthy'    => $healthy,
+                );
+            }
+        }
+
+        $unhealthy = array_values(array_filter($entries, function ($e) { return !$e['healthy']; }));
+
+        $summary = sprintf(
+            '%d/%d Partnerinstanzen gesund',
+            count($entries) - count($unhealthy), count($entries)
+        );
+        if (!empty($unhealthy)) {
+            $labels = array_map(function ($e) {
+                return $e['label'] . ' (Status ' . $e['status'] . ')';
+            }, $unhealthy);
+            $summary .= ' -- auffaellig: ' . implode(', ', $labels);
+        }
+
+        $this->SetValue('EMS_FederationHealth', $summary);
+
+        return array(
+            'summary'      => $summary,
+            'total'        => count($entries),
+            'healthyCount' => count($entries) - count($unhealthy),
+            'unhealthy'    => $unhealthy,
+            'entries'      => $entries,
+        );
     }
 
     /**
