@@ -54,6 +54,11 @@ define('GUID_TIBBERGRIDREWARD', '{E92F62F4-88A6-4C6E-9F0D-E76C3B1C9A01}');
 // siehe parseForecastNextHours()/parseForecastForSlots().
 define('GUID_PVFORECAST', '{257DD4E8-9705-462E-89FC-56D0A1038353}');
 
+// LoadForecast (LFC_GetEnergyWindow-Vertrag: erwarteter Verbrauch in kWh
+// fuer ein beliebiges Zeitfenster) -- fuer das dynamische, energiebasierte
+// Batterie-Tagesziel, siehe getDynamicSocTargetDay().
+define('GUID_LFC', '{DC5AD508-507F-40EA-8630-0959AED83050}');
+
 // GoodweET: Dietmars konsolidierter, tatsaechlich live laufender WR-Treiber
 // (nicht Teil des generischen InverterHub-*_GetFunctions-Vertrags, eigener,
 // einfacherer Vertrag: GetChannels()/ApplySetpoint()/AttachController()).
@@ -134,6 +139,8 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('BAT_SOC_Min',              10);
         $this->RegisterPropertyInteger('BAT_SOC_Target_Night',     100);
         $this->RegisterPropertyInteger('BAT_SOC_Target_Day',       80);
+        $this->RegisterPropertyBoolean('BAT_SOC_Dynamic_Target',   true);
+        $this->RegisterPropertyInteger('BAT_SOC_Safety_Margin_Pct',10);
         $this->RegisterPropertyInteger('BAT_SOC_Reserve_Backup',   10);
         for ($i = 1; $i <= 2; $i++) {
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_SOC',            0);
@@ -884,6 +891,81 @@ class EMS extends IPSModule
         $todayP50    = $today['p50']    ?? array_fill(0, 96, 0.0);
         $tomorrowP50 = $tomorrow['p50'] ?? array_fill(0, 96, 0.0);
         return array_merge($todayP50, $tomorrowP50); // Index 0-191
+    }
+
+    private function getLfcInstance()
+    {
+        if (!function_exists('LFC_GetEnergyWindow')) { return 0; }
+        $list = IPS_GetInstanceListByModuleID(GUID_LFC);
+        return !empty($list) ? $list[0] : 0;
+    }
+
+    /**
+     * Erwarteter PV-Produktionsstart morgen frueh (erster Slot mit echter
+     * Erzeugung statt Rauschen) aus PVF_GetForecast(offset=1)['mean'].
+     * Schwellwert-Formel von Prognose/LFC uebernommen (deren Build 44/45):
+     * 10W absolut ODER 2% des Tagesmaximums, je nachdem was groesser ist --
+     * bewusst 'mean' statt 'p50', konsistent zu LFC_GetEnergyWindow's
+     * eigener kwh-Berechnung (ebenfalls 'mean'-basiert).
+     */
+    private function getPvStartTomorrowTs()
+    {
+        $pvfId = $this->getPvfInstance();
+        if ($pvfId <= 0) { return 0; }
+        $tomorrow = PVF_GetForecast($pvfId, 1);
+        $mean = $tomorrow['mean'] ?? null;
+        if (!is_array($mean) || empty($mean)) { return 0; }
+        $dayMax = max($mean);
+        if ($dayMax <= 0) { return 0; }
+        $floor = max(10.0, 0.02 * $dayMax);
+        $midnight = strtotime('tomorrow midnight');
+        foreach ($mean as $i => $w) {
+            if ($w >= $floor) {
+                return $midnight + $i * 900; // 96 Slots a 15 Min
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Energiebasiertes Batterie-Tagesziel statt starrem SOC%: Wieviel
+     * Energie wird bis zum PV-Start morgen benoetigt (LFC_GetEnergyWindow),
+     * umgerechnet auf den noetigen SOC + Sicherheitsmarge. Dietmars
+     * Vorgabe 27.07.2026: "die enthaltene Energie muss nur bis zum
+     * naechsten Tag reichen, nicht ein fester SOC%". Faellt auf den
+     * statischen BAT_SOC_Target_Day-Wert zurueck, wenn LFC/PVF fehlen,
+     * BAT_SOC_Dynamic_Target deaktiviert ist, oder die Prognose den
+     * Zeitraum nicht voll abdeckt (coverage < 1.0 -- vor Prognose' Fix
+     * vom 27.07.2026 haette eine kaputte LFC-Instanz hier faelschlich
+     * coverage=1.0 mit kwh=0.0 gemeldet und ein zu niedriges Ziel erzeugt).
+     */
+    private function getDynamicSocTargetDay()
+    {
+        $staticTarget = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Day');
+        if (!$this->ReadPropertyBoolean('BAT_SOC_Dynamic_Target')) {
+            return $staticTarget;
+        }
+
+        $lfcId = $this->getLfcInstance();
+        if ($lfcId <= 0) { return $staticTarget; }
+
+        $pvStartTs = $this->getPvStartTomorrowTs();
+        if ($pvStartTs <= time()) { return $staticTarget; }
+
+        $window   = LFC_GetEnergyWindow($lfcId, time(), $pvStartTs);
+        $kwh      = $window['kwh']      ?? null;
+        $coverage = $window['coverage'] ?? 0;
+        if ($kwh === null || $coverage < 1.0) {
+            return $staticTarget;
+        }
+
+        $capacity = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
+        if ($capacity <= 0) { return $staticTarget; }
+
+        $margin = (float)$this->ReadPropertyInteger('BAT_SOC_Safety_Margin_Pct');
+        $dynamicTarget = ($kwh / $capacity * 100.0) + $margin;
+
+        return max(0.0, min(100.0, $dynamicTarget));
     }
 
     private function readDiscoveredVar($varId, $default)
@@ -1665,7 +1747,7 @@ class EMS extends IPSModule
 
         $socMin         = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
         $socTargetNight = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
-        $socTargetDay   = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Day');
+        $socTargetDay   = $this->getDynamicSocTargetDay();
         $socReserve     = (float)$this->ReadPropertyInteger('BAT_SOC_Reserve_Backup');
         $hystSoc        = (float)$this->ReadPropertyInteger('OPT_Hysteresis_SOC');
         $hystPrice      = (float)$this->ReadPropertyFloat('OPT_Hysteresis_Price');
@@ -1734,7 +1816,7 @@ class EMS extends IPSModule
             $d['gw_power_w'] = 0;
             $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
             $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
-            $d['reason']     = sprintf('PV-Eigenverbrauch: %.0fW PV, SOC=%.0f%%', $pvW, $soc);
+            $d['reason']     = sprintf('PV-Eigenverbrauch: %.0fW PV, SOC=%.0f%% (Ziel=%.0f%%)', $pvW, $soc, $socTargetDay);
             return $d;
         }
 

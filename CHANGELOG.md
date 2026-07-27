@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0 (2026-07-27)
+- **Neu**: Dynamisches, energiebasiertes Batterie-Tagesziel. Dietmars Vorgabe: "die enthaltene
+  Energie muss nur bis zum nächsten Tag reichen, nicht ein fester SOC%". Neue Methode
+  `getDynamicSocTargetDay()` nutzt `LFC_GetEnergyWindow()` (Prognose) für den erwarteten
+  Verbrauch bis zum PV-Produktionsstart morgen (`getPvStartTomorrowTs()`, Schwellwert-Formel
+  von Prognose übernommen: 10W absolut oder 2% des Tagesmaximums), rechnet das in einen
+  benötigten SOC% + Sicherheitsmarge um (neue Property `BAT_SOC_Safety_Margin_Pct`, Default
+  10%). Fällt auf den bisherigen statischen `BAT_SOC_Target_Day`-Wert zurück, wenn LFC/PVF
+  fehlen oder `coverage < 1.0` ist. Per Property `BAT_SOC_Dynamic_Target` (Default an)
+  abschaltbar. Neue Konstante `GUID_LFC`.
+
 ## 0.8.0 (2026-07-27)
 - **Nachgeholt, dringend**: `EMS_GetSpecialEvents($fromTs, $toTs)` — Vertrag existierte noch
   nicht im Code, obwohl Prognose (LFC) ihn laut eigener Aussage bereits seit Build 51 "blind"
