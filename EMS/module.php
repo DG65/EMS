@@ -696,6 +696,68 @@ class EMS extends IPSModule
      * none/ems -> Situation A). Ersetzt die alte manuelle WB{n}_Instance-
      * Verknuepfung auf die dritte-Partei-GO-eCharger-Instanz.
      */
+    /**
+     * Liefert alle Variablen-IDs, die EMS aktuell aktiv steuert (WR-Steuer-
+     * variablen + Wallbox-Freigaben) -- fuer externe Kollisions-Erkennung
+     * (z.B. StromGedachts Wenn->Dann-Regeln, die versehentlich dieselbe
+     * Stellgroesse schreiben koennten, siehe SUITE.md "Ein Regler pro
+     * Stellgroesse"). Nur lesend, loest selbst keine Discovery aus.
+     */
+    public function GetControlledVariables()
+    {
+        $result = array();
+
+        $inv = $this->getInverterEntry();
+        if ($inv !== null && $inv['source'] === 'inverterhub'
+            && ($inv['controlAuthority'] ?? 'none') === 'ems' && ($inv['controllable'] ?? false)) {
+            foreach (array('ctl_work_mode', 'ctl_ems_mode', 'ctl_ems_enable', 'ctl_ems_power') as $ident) {
+                $vid = $this->findChildVariableIdByIdent($inv['instanceID'], $ident);
+                if ($vid > 0) {
+                    $result[] = array(
+                        'variableID' => $vid,
+                        'instanceID' => $inv['instanceID'],
+                        'ident'      => $ident,
+                        'purpose'    => 'wr_control',
+                    );
+                }
+            }
+        }
+
+        foreach ($this->getWritableChargers() as $c) {
+            $vid = $c['chargeEnableID'] ?? 0;
+            if ($vid > 0) {
+                $result[] = array(
+                    'variableID' => $vid,
+                    'instanceID' => $c['instanceID'] ?? 0,
+                    'ident'      => 'ctl_enable',
+                    'purpose'    => 'wallbox_control',
+                );
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Rekursive Ident-Suche ueber Kategorien hinweg -- IPS_GetObjectIDByIdent()
+     * findet nur direkte Kinder, Steuervariablen koennen aber in einer
+     * Unterkategorie liegen (siehe SUITE.md-Stolperstein 2/7).
+     */
+    private function findChildVariableIdByIdent($parentId, $ident)
+    {
+        foreach (@IPS_GetChildrenIDs($parentId) ?: array() as $childId) {
+            $obj = IPS_GetObject($childId);
+            if ($obj['ObjectIdent'] === $ident) {
+                return $childId;
+            }
+            if ($obj['ObjectType'] == 0) { // Kategorie
+                $found = $this->findChildVariableIdByIdent($childId, $ident);
+                if ($found > 0) { return $found; }
+            }
+        }
+        return 0;
+    }
+
     private function getWritableChargers()
     {
         $partners = $this->GetPartners();

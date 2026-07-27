@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.3 (2026-07-27)
+- **Neu**: `EMS_GetControlledVariables()` — liefert alle Variablen-IDs, die EMS aktuell aktiv
+  steuert (WR-Steuervariablen `ctl_work_mode`/`ctl_ems_mode`/`ctl_ems_enable`/`ctl_ems_power`,
+  Wallbox-Freigaben). Gedacht für externe Kollisions-Erkennung, konkret angefragt von
+  StromGedacht: deren Wenn→Dann-Automations-Engine könnte sonst versehentlich dieselbe
+  Stellgröße wie EMS schreiben ("Ein Regler pro Stellgröße"-Regel, bisher nur Nutzerdisziplin,
+  keine technische Absicherung). Rein lesend, löst keine Discovery aus.
+
 ## 0.7.2 (2026-07-27)
 - **Echter Root-Cause-Fix** (Revision von 0.7.1): InverterHub hat anhand der offiziellen
   GoodWe-Modbus-Registerdoku (ARM205-HV Tab. 8-16) geklärt, dass `ctl_ems_power` in
