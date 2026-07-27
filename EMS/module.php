@@ -1576,16 +1576,16 @@ class EMS extends IPSModule
         }
 
         // ── 3. PV-Ueberschuss → Eigenverbrauch ──────────────────────
-        // Live beobachtet 27.07.2026: GW_MODE_CHARGE_PV ("Laden-Solar") laedt
-        // bei diesem WR trotz Namens NICHT nur aus PV-Ueberschuss, sondern
-        // mischt eigenstaendig Netzstrom zu, um schneller zu laden (bis zu
-        // 3,4kW Netzbezug bei 5,1kW PV beobachtet). GW_MODE_AUTO ("Automatik")
-        // haelt sich dagegen korrekt an reinen PV-Ueberschuss (Netzbezug fiel
-        // im Test auf 0W). Deshalb hier bewusst AUTO statt CHARGE_PV, bis
-        // InverterHub/GoodweET das GW_MODE_CHARGE_PV-Verhalten korrigiert hat.
+        // GW_MODE_CHARGE_PV ("Laden-Solar", Register 47511=2): Batterie-Ziel =
+        // ctl_ems_power(Netzanteil) + PV, lt. GoodWe-Registerdoku (ARM205-HV
+        // Tab. 8-16). $powerW=0 bedeutet "nur PV" -- das setGoodweMode() jetzt
+        // IMMER explizit schreibt (siehe dort), nicht nur bei >0. Live verifiziert
+        // 27.07.2026: mit explizitem 0 faellt der Netzbezug auf 0W; zuvor stand
+        // ein alter Wert (3000) unangetastet im Register, weil powerW=0 frueher
+        // nie geschrieben wurde.
         if ($pvW > $fcMinPower && $s['bat_active'] && $soc < ($socTargetDay - $hystSoc)) {
             $d['op_mode']    = EMS_OP_PV_SELFUSE;
-            $d['gw_mode']    = GW_MODE_AUTO;
+            $d['gw_mode']    = GW_MODE_CHARGE_PV;
             $d['gw_power_w'] = 0;
             $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
             $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
@@ -1711,9 +1711,14 @@ class EMS extends IPSModule
                 // entlud trotz korrekt gesetztem Modus=3 nicht, weil enable=false war).
                 IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', true);
                 IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
-                if ($powerW > 0) {
-                    IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', $powerW);
-                }
+                // IMMER schreiben, auch 0 -- ctl_ems_power (Register 47512) ist in
+                // GW_MODE_CHARGE_PV keine additive Zusatzleistung, sondern eine
+                // Netzbezugs-OBERGRENZE (Batterie-Ziel = ctl_ems_power(Netz) + PV,
+                // lt. GoodWe Modbus-Doku ARM205-HV Tab. 8-16). Ein "if ($powerW > 0)"
+                // liess hier frueher einen stehengebliebenen alten Wert unangetastet
+                // (live beobachtet 27.07.2026: 3000W Altwert fuehrte zu 3,4kW
+                // ungewolltem Netzbezug trotz $powerW=0 in der aktuellen Entscheidung).
+                IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', (int)$powerW);
                 return;
             }
             $this->emsLog(EMS_LOG_BASIC, sprintf(

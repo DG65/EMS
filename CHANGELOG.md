@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.2 (2026-07-27)
+- **Echter Root-Cause-Fix** (Revision von 0.7.1): InverterHub hat anhand der offiziellen
+  GoodWe-Modbus-Registerdoku (ARM205-HV Tab. 8-16) geklärt, dass `ctl_ems_power` in
+  `GW_MODE_CHARGE_PV` eine Netzbezugs-OBERGRENZE ist (Batterie-Ziel = ctl_ems_power(Netz) +
+  PV), kein additiver Zusatzwert — dokumentiertes, beabsichtigtes WR-Verhalten. Der
+  tatsächliche Fehler lag in unserem eigenen `setGoodweMode()`: `if ($powerW > 0)` schrieb
+  `ctl_ems_power` nie explizit auf 0, sodass ein alter Wert (bei Dietmar: 3000) stehen blieb
+  und ungewollten Netzbezug verursachte (3,4kW bei 5,1kW PV). Fix: `ctl_ems_power` wird jetzt
+  IMMER geschrieben, auch 0. `optimize()`-Branch 3 nutzt wieder `GW_MODE_CHARGE_PV` (der
+  AUTO-Workaround aus 0.7.1 war nur eine Notlösung, keine echte Ursachenbehebung).
+
 ## 0.7.1 (2026-07-27)
 - **Kritischer Fix**: `optimize()`-Branch 3 ("PV-Ueberschuss → Eigenverbrauch") nutzte
   `GW_MODE_CHARGE_PV`, das bei Dietmars WR trotz Namens NICHT nur aus PV-Ueberschuss laedt —
