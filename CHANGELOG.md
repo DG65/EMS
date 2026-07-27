@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.0 (2026-07-27)
+- **Architektur-Umbau**: `applyDecision()` schreibt den GoodWe-Modus/-Leistung jetzt JEDEN
+  Zyklus neu (kontinuierliche Regelschleife nach OpenEMS-Vorbild — `ControllerEssBalancing`/
+  `TimeOfUseTariff` rechnen und schreiben ebenfalls laufend, nicht nur bei Entscheidungs-
+  änderung). Grund: GoodWes eigener "SMART"-Modus fällt bei einem nur einmalig geschriebenen
+  Wert auf den Sentinel 255 zurück (siehe "GoodWe-Steuerregister" in SUITE.md). Der Cooldown
+  (`OPT_Cooldown_Sec`) gilt weiterhin, aber nur noch für den eigentlichen Moduswechsel (verhindert
+  Thrashing); während der Cooldown-Phase wird der zuletzt aktive Modus trotzdem laufend
+  reasserted, statt komplett zu pausieren.
+
 ## 0.9.0 (2026-07-27)
 - **Neu**: Dynamisches, energiebasiertes Batterie-Tagesziel. Dietmars Vorgabe: "die enthaltene
   Energie muss nur bis zum nächsten Tag reichen, nicht ein fester SOC%". Neue Methode

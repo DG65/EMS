@@ -1867,20 +1867,34 @@ class EMS extends IPSModule
         $lastDecision = $this->ReadAttributeInteger('LastDecision');
         $now          = time();
 
-        // Cooldown pruefen — bei Grid Rewards immer aktualisieren
-        // da sich die Import-Leistung laufend aendern kann
+        // Kontinuierliche Regelschleife (OpenEMS-Vorbild, 27.07.2026): der
+        // Sollwert wird JEDEN Zyklus neu geschrieben, nicht nur bei
+        // Aenderung -- ein einmaliger Schreibvorgang faellt sonst GoodWes
+        // eigenem SMART-Modus zum Opfer (live beobachtet, siehe Abschnitt
+        // "GoodWe-Steuerregister" in SUITE.md: ctl_ems_mode springt bei den
+        // meisten Werten von selbst auf Sentinel 255 zurueck, wenn er nicht
+        // laufend reasserted wird).
+        //
+        // Cooldown gilt nur fuer den eigentlichen MODUSWECHSEL (verhindert
+        // Thrashing zwischen Modi bei knapp schwankenden Schwellwerten) --
+        // waehrend der Cooldown-Phase wird trotzdem der zuletzt aktive
+        // Modus weiter reasserted, statt komplett zu pausieren.
         $isGridRewards = ($d['op_mode'] === EMS_OP_GRIDREWARDS);
-        if (!$isGridRewards && $d['gw_mode'] !== $lastMode && ($now - $lastDecision) < $cooldown) {
-            $this->emsLog(EMS_LOG_VERBOSE, 'Cooldown aktiv (' . ($now - $lastDecision) . 's < ' . $cooldown . 's)');
+        $modeChanging  = ($d['gw_mode'] !== $lastMode);
+
+        if ($modeChanging && !$isGridRewards && ($now - $lastDecision) < $cooldown) {
+            $this->emsLog(EMS_LOG_VERBOSE, 'Cooldown aktiv (' . ($now - $lastDecision) . 's < ' . $cooldown . 's) -- reassert letzter Modus ' . $lastMode);
+            $this->setGoodweMode($lastMode, 0);
             return;
         }
 
-        // Goodwe Modus setzen
-        if ($d['gw_mode'] !== $lastMode || $isGridRewards) {
-            $this->setGoodweMode($d['gw_mode'], $d['gw_power_w']);
+        $this->setGoodweMode($d['gw_mode'], $d['gw_power_w']);
+        if ($modeChanging || $isGridRewards) {
             $this->WriteAttributeInteger('LastGoodweMode', $d['gw_mode']);
             $this->WriteAttributeInteger('LastDecision',   $now);
             $this->emsLog(EMS_LOG_BASIC, 'Goodwe -> Modus ' . $d['gw_mode'] . ' | ' . $d['reason']);
+        } else {
+            $this->emsLog(EMS_LOG_VERBOSE, 'Goodwe -> Modus ' . $d['gw_mode'] . ' (reassert) | ' . $d['reason']);
         }
 
         // Leistungseinstellung immer aktualisieren wenn gesetzt
