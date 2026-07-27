@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.1 (2026-07-27)
+- **Kritischer Fix**: `optimize()`-Branch 3 ("PV-Ueberschuss → Eigenverbrauch") nutzte
+  `GW_MODE_CHARGE_PV`, das bei Dietmars WR trotz Namens NICHT nur aus PV-Ueberschuss laedt —
+  live beobachtet: 3,4kW Netzbezug bei 5,1kW PV, obwohl EMS keine Leistungsvorgabe gemacht
+  hatte (`gw_power_w=0`). Nach manueller Umschaltung auf `GW_MODE_AUTO` fiel der Netzbezug
+  auf 0W. Branch 3 nutzt jetzt bewusst `GW_MODE_AUTO` statt `GW_MODE_CHARGE_PV`, bis
+  InverterHub/GoodweET das CHARGE_PV-Verhalten korrigiert haben.
+
 ## 0.7.0 (2026-07-27)
 - **Neu**: `EMS_GetFederationHealth()` — verbundweite Statusaggregation über alle bei
   `Discover()` gefundenen Partnerinstanzen (InverterHub/GoodweET, MeterHub, ChargerHub,
