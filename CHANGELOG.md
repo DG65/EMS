@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0 (2026-07-27)
+- **Nachgeholt, dringend**: `EMS_GetSpecialEvents($fromTs, $toTs)` — Vertrag existierte noch
+  nicht im Code, obwohl Prognose (LFC) ihn laut eigener Aussage bereits seit Build 51 "blind"
+  konsumiert hatte. Liefert jetzt Zeitfenster externer Regeleingriffe (aktuell: Tibber Grid
+  Rewards), die lernende Module vom Training ausschließen sollten. Neue private Methode
+  `trackSpecialEvents()` pflegt ein persistentes, auf 500 Einträge gedeckeltes Ereignisprotokoll
+  (`SpecialEventsLog`-Attribut), aufgerufen bei jedem `Update()`-Zyklus. `contractVersion` 1.0.
+
 ## 0.7.3 (2026-07-27)
 - **Neu**: `EMS_GetControlledVariables()` — liefert alle Variablen-IDs, die EMS aktuell aktiv
   steuert (WR-Steuervariablen `ctl_work_mode`/`ctl_ems_mode`/`ctl_ems_enable`/`ctl_ems_power`,

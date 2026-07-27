@@ -242,6 +242,11 @@ class EMS extends IPSModule
         $this->RegisterAttributeInteger('LastDecision',      0);
         $this->RegisterAttributeInteger('ConsecutiveErrors', 0);
 
+        // ── Sondereffekt-Ereignisliste (externe Regeleingriffe, siehe
+        // EMS_GetSpecialEvents()/trackSpecialEvents() -- lernende Module
+        // wie LFC/PVF schliessen diese Fenster vom Training aus) ───────
+        $this->RegisterAttributeString('SpecialEventsLog', '[]');
+
         // ── NRG-Stack Discovery (additiv, siehe discoverPartners()) ──
         $this->RegisterAttributeString('PartnerCache', '{}');
         $this->RegisterVariableString('EMS_Partners', 'NRG-Stack Partnermodule', '', 5);
@@ -403,6 +408,7 @@ class EMS extends IPSModule
             $this->updateStatusVars($state);
             $decision = $this->optimize($state);
             $this->applyDecision($decision, $state);
+            $this->trackSpecialEvents($state);
             $this->WriteAttributeInteger('ConsecutiveErrors', 0);
             $this->SetStatus(102);
 
@@ -769,6 +775,83 @@ class EMS extends IPSModule
             }
         }
         return $result;
+    }
+
+    /**
+     * Pflegt SpecialEventsLog: offene/geschlossene Zeitfenster fuer externe
+     * Regeleingriffe, die den Normalbetrieb ueberschreiben (aktuell erkannt:
+     * Tibber Grid Rewards -- Tibber uebernimmt die Wallbox-Steuerung, EMS
+     * weicht in seine Grid-Rewards-Sonderlogik aus). Wird bei jedem Update()
+     * aufgerufen: verlaengert ein bereits offenes Ereignis (setzt 'to' auf
+     * jetzt), oder eroeffnet ein neues, wenn die Bedingung neu eintritt.
+     * Absichtlich konservativ erweiterbar -- ein zusaetzlicher Ereignistyp
+     * braucht nur einen weiteren Eintrag in $conditions.
+     */
+    private function trackSpecialEvents($s)
+    {
+        $conditions = array(
+            'grid_rewards' => !empty($s['grid_rewards']),
+        );
+
+        $log = json_decode($this->ReadAttributeString('SpecialEventsLog'), true);
+        if (!is_array($log)) { $log = array(); }
+        $now = time();
+
+        foreach ($conditions as $type => $active) {
+            $openIdx = null;
+            foreach ($log as $i => $ev) {
+                if (($ev['type'] ?? '') === $type && ($ev['to'] ?? null) === null) {
+                    $openIdx = $i;
+                    break;
+                }
+            }
+            if ($active) {
+                if ($openIdx !== null) {
+                    $log[$openIdx]['to'] = null; // bleibt offen, nur Existenz bestaetigt
+                } else {
+                    $log[] = array('from' => $now, 'to' => null, 'type' => $type, 'reason' => $type);
+                }
+            } elseif ($openIdx !== null) {
+                $log[$openIdx]['to'] = $now; // Ereignis endet jetzt
+            }
+        }
+
+        // Deckel bei 500 Eintraegen, aelteste zuerst raus
+        if (count($log) > 500) {
+            $log = array_slice($log, count($log) - 500);
+        }
+
+        $this->WriteAttributeString('SpecialEventsLog', json_encode($log));
+    }
+
+    /**
+     * Vertrag fuer lernende Module (LFC/PVF): Zeitfenster, in denen ein
+     * externer Regeleingriff den Normalbetrieb ueberschrieben hat -- diese
+     * Fenster sollten vom Trainingsdatensatz ausgeschlossen werden, da sie
+     * kein normales Last-/Erzeugungsverhalten widerspiegeln.
+     */
+    public function GetSpecialEvents($fromTs = 0, $toTs = 0)
+    {
+        $log = json_decode($this->ReadAttributeString('SpecialEventsLog'), true);
+        if (!is_array($log)) { $log = array(); }
+
+        $events = array();
+        foreach ($log as $ev) {
+            $evTo = $ev['to'] ?? time(); // noch offenes Ereignis reicht bis "jetzt"
+            if ($fromTs > 0 && $evTo < $fromTs) { continue; }
+            if ($toTs > 0 && ($ev['from'] ?? 0) > $toTs) { continue; }
+            $events[] = array(
+                'from'   => $ev['from'] ?? 0,
+                'to'     => $ev['to'] ?? null,
+                'type'   => $ev['type'] ?? 'unknown',
+                'reason' => $ev['reason'] ?? '',
+            );
+        }
+
+        return array(
+            'contractVersion' => '1.0',
+            'events'          => $events,
+        );
     }
 
     /**
