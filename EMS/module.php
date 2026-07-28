@@ -326,6 +326,31 @@ class EMS extends IPSModule
             )
         ));
 
+        // 3. "Verbund-Status" — live Statusdaten direkt im Formular, nicht nur
+        // als Statusvariable im Objektbaum (Nutzer-Feedback 27.07.2026: Text
+        // verwies auf "oben im Formular", aber die Werte standen bisher nur
+        // im Objektbaum, nicht im Formular selbst).
+        array_unshift($form['elements'], array(
+            'type'     => 'ExpansionPanel',
+            'caption'  => '🔗 Verbund-Status',
+            'expanded' => true,
+            'items'    => array(
+                array(
+                    'type'    => 'Label',
+                    'caption' => 'NRG-Stack Partnermodule: ' . $this->GetValue('EMS_Partners')
+                ),
+                array(
+                    'type'    => 'Label',
+                    'caption' => 'Verbund-Gesundheit: ' . $this->GetValue('EMS_FederationHealth')
+                ),
+                array(
+                    'type'    => 'Button',
+                    'caption' => '🔎 Jetzt neu suchen',
+                    'onClick' => 'EMS_Discover($id);'
+                ),
+            )
+        ));
+
         // 1. "Was ist Neu" — aufgeklappt, pro Version dismissible
         if ($this->ReadAttributeString('SeenNews') !== EMS_NEWS_VERSION) {
             array_unshift($form['elements'], array(

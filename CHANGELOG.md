@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.4 (2026-07-27)
+- **Nachbesserung, direktes Nutzer-Feedback**: Der Hilfetext bei "Netzmesspunkte" verwies auf
+  "NRG-Stack Partnermodule"/"Verbund-Gesundheit" "oben im Formular" — die standen aber nur als
+  Statusvariablen im Objektbaum, nicht im Formular selbst. Neues, immer aufgeklapptes Panel
+  "🔗 Verbund-Status" ganz oben im Formular zeigt beide Werte jetzt tatsächlich live an, inkl.
+  Button "Jetzt neu suchen". Hilfetext entsprechend korrigiert.
+
 ## 0.10.3 (2026-07-27)
 - **Weitere Nachbesserung, systematisch gesucht statt nur an gemeldeten Stellen**: 20 Feld-
   Captions im "Wechselrichter & PV"-Panel enthielten Dietmars eigene, konkrete Symcon-

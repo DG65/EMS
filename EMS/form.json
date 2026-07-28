@@ -92,7 +92,7 @@
                     "items": [
                         {
                             "type": "Label",
-                            "caption": "Sind meine Zähler verbunden? Schau in \"NRG-Stack Partnermodule\" (zeigt die Anzahl automatisch gefundener Instanzen je Modul) und \"Verbund-Gesundheit\" (zeigt, ob sie fehlerfrei laufen) oben im Formular -- beide aktualisieren sich bei jedem Update-Zyklus, oder sofort per Klick auf \"NRG-Stack-Partnermodule suchen\". Steht dort etwas bei MeterHub/GoodweET/InverterHub, brauchst du die Felder unten NICHT."
+                            "caption": "Sind meine Zähler verbunden? Schau ganz oben im Panel \"🔗 Verbund-Status\" -- dort stehen die aktuellen Werte direkt im Formular (nicht nur im Objektbaum), inkl. Button \"Jetzt neu suchen\". Steht dort etwas bei MeterHub/GoodweET/InverterHub, brauchst du die Felder unten NICHT."
                         },
                         {
                             "type": "PopupButton",
