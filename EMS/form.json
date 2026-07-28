@@ -262,22 +262,22 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_EMS_Mode",
-                    "caption": "EMS Leistungsmodus (ID 49060)"
+                    "caption": "EMS Leistungsmodus"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_EMS_Power",
-                    "caption": "EMS Leistungseinstellung (ID 20610, W)"
+                    "caption": "EMS Leistungseinstellung (W)"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Export_Enable",
-                    "caption": "Leistungsexport Ja/Nein (ID 53749)"
+                    "caption": "Leistungsexport Ja/Nein"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Export_Limit",
-                    "caption": "Limit Leistungsexport (ID 54017, W)"
+                    "caption": "Limit Leistungsexport (W)"
                 },
                 {
                     "type": "Label",
@@ -286,82 +286,82 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_Start",
-                    "caption": "Startzeit 1 (ID 53840)"
+                    "caption": "Startzeit 1"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_End",
-                    "caption": "Endzeit 1 (ID 19775)"
+                    "caption": "Endzeit 1"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_Power",
-                    "caption": "Batterieleistung 1 in Prozent (ID 23711)"
+                    "caption": "Batterieleistung 1 in Prozent"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time1_Week",
-                    "caption": "Arbeitswoche 1 (ID 27399)"
+                    "caption": "Arbeitswoche 1"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_Start",
-                    "caption": "Startzeit 2 (ID 59917)"
+                    "caption": "Startzeit 2"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_End",
-                    "caption": "Endzeit 2 (ID 58454)"
+                    "caption": "Endzeit 2"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_Power",
-                    "caption": "Batterieleistung 2 in Prozent (ID 24072)"
+                    "caption": "Batterieleistung 2 in Prozent"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time2_Week",
-                    "caption": "Arbeitswoche 2 (ID 44592)"
+                    "caption": "Arbeitswoche 2"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_Start",
-                    "caption": "Startzeit 3 (ID 29220)"
+                    "caption": "Startzeit 3"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_End",
-                    "caption": "Endzeit 3 (ID 56194)"
+                    "caption": "Endzeit 3"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_Power",
-                    "caption": "Batterieleistung 3 in Prozent (ID 36069)"
+                    "caption": "Batterieleistung 3 in Prozent"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time3_Week",
-                    "caption": "Arbeitswoche 3 (ID 20549)"
+                    "caption": "Arbeitswoche 3"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_Start",
-                    "caption": "Startzeit 4 (ID 55084)"
+                    "caption": "Startzeit 4"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_End",
-                    "caption": "Endzeit 4 (ID 36555)"
+                    "caption": "Endzeit 4"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_Power",
-                    "caption": "Batterieleistung 4 in Prozent (ID 24977)"
+                    "caption": "Batterieleistung 4 in Prozent"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_WR_Time4_Week",
-                    "caption": "Arbeitswoche 4 (ID 53902)"
+                    "caption": "Arbeitswoche 4"
                 },
                 {
                     "type": "Label",

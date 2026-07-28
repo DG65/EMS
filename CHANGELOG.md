@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.3 (2026-07-27)
+- **Weitere Nachbesserung, systematisch gesucht statt nur an gemeldeten Stellen**: 20 Feld-
+  Captions im "Wechselrichter & PV"-Panel enthielten Dietmars eigene, konkrete Symcon-
+  Variablen-IDs (z. B. "Startzeit 1 (ID 53840)") — Entwicklungs-Reste von seiner eigenen
+  Anlage, für jeden anderen Nutzer bedeutungslos bzw. verwirrend. Entfernt (Einheiten wie
+  "(W)" dabei erhalten). Gehört zum selben Muster wie der GoodWe/PAC2200-Fund: eigene,
+  konkrete Anlagendetails dürfen nicht als allgemeingültig im Formular stehen bleiben.
+
 ## 0.10.2 (2026-07-27)
 - **Nachbesserung nach direktem Nutzer-Feedback zu 0.10.1**: Der neue PopupButton-Hilfetext
   erklärte Modul-Historie ("ursprüngliche Bezeichnung...") statt die eigentliche Nutzerfrage zu
