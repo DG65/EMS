@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.1 (2026-07-27)
+- **UX-Fix, direktes Nutzer-Feedback**: Die Formular-Panels "Netzmesspunkte", "Wechselrichter &
+  PV", "Batteriespeicher" (Fallback-Teil), "Wallboxen" (Fallback-Teil) und "Wärmepumpe" waren
+  reine Relikte aus der Zeit vor der automatischen NRG-Stack-Discovery — ohne jede Erklärung,
+  ob/wann sie überhaupt ausgefüllt werden müssen. "Primärmessung: Goodwe SmartMeter (Pflicht)"
+  war zudem sachlich falsch: nicht jeder Nutzer hat einen GoodWe-Wechselrichter (SMA, Fronius
+  etc. laufen über MeterHub genauso). Alle betroffenen Panels haben jetzt: (a) Panel-Titel mit
+  "(optionaler manueller Fallback)"-Hinweis, (b) einen erklärenden Label-Text direkt am
+  Panel-/Abschnittsanfang, (c) bei "Netzmesspunkte" zusätzlich einen PopupButton mit
+  ausführlicherer Erklärung (erste Anwendung der eigenen PopupButton-Konvention im EMS-Formular
+  selbst).
+
 ## 0.10.0 (2026-07-27)
 - **Architektur-Umbau**: `applyDecision()` schreibt den GoodWe-Modus/-Leistung jetzt JEDEN
   Zyklus neu (kontinuierliche Regelschleife nach OpenEMS-Vorbild — `ControllerEssBalancing`/

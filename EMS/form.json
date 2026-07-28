@@ -84,12 +84,46 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "📡 Netzmesspunkte",
+            "caption": "📡 Netzmesspunkte (optionaler manueller Fallback)",
             "expanded": false,
             "items": [
                 {
-                    "type": "Label",
-                    "caption": "── Primärmessung: Goodwe SmartMeter (Pflicht) ────────"
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "Label",
+                            "caption": "Für die meisten Nutzer NICHT nötig: EMS findet Netzmesswerte normalerweise automatisch über ein erkanntes Partnermodul (MeterHub, GoodweET, InverterHub) -- siehe Button \"NRG-Stack-Partnermodule suchen\" oben. Diese Felder hier sind nur ein manueller Fallback, falls kein Partnermodul installiert ist oder ein zusätzlicher, unabhängiger Zähler eingebunden werden soll."
+                        },
+                        {
+                            "type": "PopupButton",
+                            "caption": "?",
+                            "width": "70px",
+                            "popup": {
+                                "caption": "Netzmesspunkte -- wann brauche ich das?",
+                                "items": [
+                                    {
+                                        "type": "Label",
+                                        "caption": "Kurz: In den meisten Fällen gar nicht. EMS_Discover() findet automatisch installierte Partnermodule (MeterHub für beliebige Zählermarken, GoodweET/InverterHub für GoodWe-Wechselrichter mit eingebautem SmartMeter) und liest deren Netzmesswerte direkt -- ohne dass hier irgendetwas verknüpft werden muss."
+                                    },
+                                    {
+                                        "type": "Label",
+                                        "caption": "\"Goodwe SmartMeter\" ist NICHT für jeden Pflicht -- das war nur die ursprüngliche Bezeichnung aus der Zeit vor der automatischen Erkennung. Wer z.B. einen SMA-, Fronius- oder sonstigen Wechselrichter hat, braucht hier gar nichts: MeterHub deckt praktisch jede Zählermarke ab."
+                                    },
+                                    {
+                                        "type": "Label",
+                                        "caption": "Nur ausfüllen, wenn: (a) kein unterstütztes Partnermodul installiert ist, oder (b) ein zusätzlicher, unabhängiger Zähler manuell eingebunden werden soll (z.B. als Gegenprobe). In dem Fall hier je Feld die passende Variable per Klick auswählen -- die Variable muss bereits in Symcon existieren (z.B. von Shelly, Siemens PAC2200 o.ä.)."
+                                    }
+                                ],
+                                "buttons": [
+                                    {
+                                        "type": "Button",
+                                        "caption": "Verstanden",
+                                        "onClick": ""
+                                    }
+                                ]
+                            }
+                        }
+                    ]
                 },
                 {
                     "type": "SelectVariable",
@@ -214,9 +248,13 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "⚡ Wechselrichter & PV",
+            "caption": "⚡ Wechselrichter & PV (optionaler manueller Fallback)",
             "expanded": false,
             "items": [
+                {
+                    "type": "Label",
+                    "caption": "Nur nötig, falls kein Partnermodul (GoodweET/InverterHub) automatisch gefunden wurde -- normalerweise übernimmt das die automatische Erkennung, siehe \"Dokumentation & Hilfe\" oben."
+                },
                 {
                     "type": "Label",
                     "caption": "── EMS Steuerregister (schreibend) ───────────────────"
@@ -448,6 +486,10 @@
                 },
                 {
                     "type": "Label",
+                    "caption": "Ab hier optionaler manueller Fallback -- nur ausfüllen, falls kein Partnermodul (InverterHub/GoodweET) automatisch gefunden wurde. Die Einstellungen oben (Kapazität, SOC-Grenzen) gelten unabhängig davon immer."
+                },
+                {
+                    "type": "Label",
                     "caption": "── Batteriestring 1 ──────────────────────────────────"
                 },
                 {
@@ -572,6 +614,10 @@
                     "type": "CheckBox",
                     "name": "WB_GridRewards_Active",
                     "caption": "Grid Rewards Modus aktiv (Tibber steuert Wallbox, Batterie passiv)"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Ab hier optionaler manueller Fallback -- normalerweise findet EMS ChargerHub-Instanzen automatisch. Nur ausfüllen für eine ältere, direkte go-e-Charger-Anbindung ohne ChargerHub."
                 },
                 {
                     "type": "Label",
@@ -776,9 +822,13 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "🌡️ Wärmepumpe (Monitoring)",
+            "caption": "🌡️ Wärmepumpe (Monitoring, optionaler manueller Fallback)",
             "expanded": false,
             "items": [
+                {
+                    "type": "Label",
+                    "caption": "Nur nötig, falls kein HeishaMon (oder ähnliches Wärmepumpen-Modul) automatisch gefunden wurde."
+                },
                 {
                     "type": "CheckBox",
                     "name": "HP_Active",
