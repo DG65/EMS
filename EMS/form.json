@@ -92,7 +92,7 @@
                     "items": [
                         {
                             "type": "Label",
-                            "caption": "Für die meisten Nutzer NICHT nötig: EMS findet Netzmesswerte normalerweise automatisch über ein erkanntes Partnermodul (MeterHub, GoodweET, InverterHub) -- siehe Button \"NRG-Stack-Partnermodule suchen\" oben. Diese Felder hier sind nur ein manueller Fallback, falls kein Partnermodul installiert ist oder ein zusätzlicher, unabhängiger Zähler eingebunden werden soll."
+                            "caption": "Sind meine Zähler verbunden? Schau in \"NRG-Stack Partnermodule\" (zeigt die Anzahl automatisch gefundener Instanzen je Modul) und \"Verbund-Gesundheit\" (zeigt, ob sie fehlerfrei laufen) oben im Formular -- beide aktualisieren sich bei jedem Update-Zyklus, oder sofort per Klick auf \"NRG-Stack-Partnermodule suchen\". Steht dort etwas bei MeterHub/GoodweET/InverterHub, brauchst du die Felder unten NICHT."
                         },
                         {
                             "type": "PopupButton",
@@ -103,15 +103,11 @@
                                 "items": [
                                     {
                                         "type": "Label",
-                                        "caption": "Kurz: In den meisten Fällen gar nicht. EMS_Discover() findet automatisch installierte Partnermodule (MeterHub für beliebige Zählermarken, GoodweET/InverterHub für GoodWe-Wechselrichter mit eingebautem SmartMeter) und liest deren Netzmesswerte direkt -- ohne dass hier irgendetwas verknüpft werden muss."
+                                        "caption": "Die Felder unten sind nur ein manueller Notweg für den Fall, dass kein passendes Partnermodul gefunden wurde (\"NRG-Stack Partnermodule\" zeigt 0) -- oder wenn du zusätzlich zu einem bereits gefundenen Modul einen weiteren, unabhängigen Zähler als Gegenprobe einbinden willst."
                                     },
                                     {
                                         "type": "Label",
-                                        "caption": "\"Goodwe SmartMeter\" ist NICHT für jeden Pflicht -- das war nur die ursprüngliche Bezeichnung aus der Zeit vor der automatischen Erkennung. Wer z.B. einen SMA-, Fronius- oder sonstigen Wechselrichter hat, braucht hier gar nichts: MeterHub deckt praktisch jede Zählermarke ab."
-                                    },
-                                    {
-                                        "type": "Label",
-                                        "caption": "Nur ausfüllen, wenn: (a) kein unterstütztes Partnermodul installiert ist, oder (b) ein zusätzlicher, unabhängiger Zähler manuell eingebunden werden soll (z.B. als Gegenprobe). In dem Fall hier je Feld die passende Variable per Klick auswählen -- die Variable muss bereits in Symcon existieren (z.B. von Shelly, Siemens PAC2200 o.ä.)."
+                                        "caption": "Falls nötig: hier je Feld per Klick eine bereits in Symcon existierende Variable auswählen (egal von welchem Hersteller/Modul sie kommt -- Shelly, Siemens PAC2200, o.ä.)."
                                     }
                                 ],
                                 "buttons": [
@@ -157,17 +153,21 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Sekundärmessung: Siemens PAC2200 (optional) ──────"
+                    "caption": "── Zusätzlicher Kontroll-Zähler (optional, für alle) ─"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Komplett optional, nur für alle, die zusätzlich zum Netzzähler oben noch einen zweiten, unabhängigen Zähler zur Gegenprobe einbinden möchten -- unabhängig vom Hersteller (Siemens PAC2200 war nur das ursprünglich verwendete Beispielgerät, jede andere Marke funktioniert genauso über SelectVariable)."
                 },
                 {
                     "type": "CheckBox",
                     "name": "PAC2200_Active",
-                    "caption": "PAC2200 aktivieren"
+                    "caption": "Kontroll-Zähler aktivieren"
                 },
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Power",
-                    "caption": "PAC2200 Wirkleistung L1 (W)",
+                    "caption": "Kontroll-Zähler Wirkleistung L1 (W)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -177,7 +177,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Power",
-                    "caption": "PAC2200 Wirkleistung L2 (W)",
+                    "caption": "Kontroll-Zähler Wirkleistung L2 (W)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -187,7 +187,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Power",
-                    "caption": "PAC2200 Wirkleistung L3 (W)",
+                    "caption": "Kontroll-Zähler Wirkleistung L3 (W)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -197,7 +197,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L1_Current",
-                    "caption": "PAC2200 Strom L1 (A)",
+                    "caption": "Kontroll-Zähler Strom L1 (A)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -207,7 +207,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L2_Current",
-                    "caption": "PAC2200 Strom L2 (A)",
+                    "caption": "Kontroll-Zähler Strom L2 (A)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -217,7 +217,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_L3_Current",
-                    "caption": "PAC2200 Strom L3 (A)",
+                    "caption": "Kontroll-Zähler Strom L3 (A)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -227,7 +227,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Import",
-                    "caption": "PAC2200 Wirkarbeit Bezug (Wh)",
+                    "caption": "Kontroll-Zähler Wirkarbeit Bezug (Wh)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",
@@ -237,7 +237,7 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_PAC_Energy_Export",
-                    "caption": "PAC2200 Wirkarbeit Abgabe (Wh)",
+                    "caption": "Kontroll-Zähler Wirkarbeit Abgabe (Wh)",
                     "visible": {
                         "type": "PropertyCondition",
                         "property": "PAC2200_Active",

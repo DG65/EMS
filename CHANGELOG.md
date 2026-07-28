@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.2 (2026-07-27)
+- **Nachbesserung nach direktem Nutzer-Feedback zu 0.10.1**: Der neue PopupButton-Hilfetext
+  erklärte Modul-Historie ("ursprüngliche Bezeichnung...") statt die eigentliche Nutzerfrage zu
+  beantworten. Jetzt direkt: "Sind meine Zähler verbunden?" verweist auf die Statusvariablen
+  "NRG-Stack Partnermodule"/"Verbund-Gesundheit". Zusätzlich denselben Fehler beim
+  "Sekundärmessung: Siemens PAC2200"-Abschnitt behoben — auch das war ein Spezialprodukt fest
+  im Formular verankert, obwohl es ein rein optionaler, herstellerunabhängiger Kontroll-Zähler
+  ist. Alle Feld-Captions von "PAC2200 ..." auf "Kontroll-Zähler ..." umbenannt (Property-Namen
+  intern unverändert, kein Breaking Change).
+
 ## 0.10.1 (2026-07-27)
 - **UX-Fix, direktes Nutzer-Feedback**: Die Formular-Panels "Netzmesspunkte", "Wechselrichter &
   PV", "Batteriespeicher" (Fallback-Teil), "Wallboxen" (Fallback-Teil) und "Wärmepumpe" waren
