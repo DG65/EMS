@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.5 (2026-07-29)
+- **Namenskonvention**: Sichtbarer Anzeigename jetzt "NRG-Stack EMS" statt "NRGEMS"
+  (`library.json`→`name`, `module.json`→`aliases`). GUID, `module.json`→`name` (PHP-
+  Klassenname), Idents und Präfixe unverändert — bestehende Instanzen und künftige
+  Git-Updates bleiben unberührt, nur der in Modulverwaltung/Instanzsuche sichtbare Name
+  ändert sich. Alte Bezeichnung "NRGEMS" bleibt zusätzlich als Alias erhalten.
+
 ## 0.10.4 (2026-07-27)
 - **Nachbesserung, direktes Nutzer-Feedback**: Der Hilfetext bei "Netzmesspunkte" verwies auf
   "NRG-Stack Partnermodule"/"Verbund-Gesundheit" "oben im Formular" — die standen aber nur als
