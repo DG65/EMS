@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.6 (2026-07-29)
+- **Korrektur zu 0.10.5**: "NRGEMS" als Alias wieder entfernt — Dietmars Anweisung war, dass
+  alte Bezeichnungen entfallen sollen, nicht nur ergänzt werden. Aliase jetzt nur noch
+  "NRG-Stack EMS" und "Energy Management System".
+
 ## 0.10.5 (2026-07-29)
 - **Namenskonvention**: Sichtbarer Anzeigename jetzt "NRG-Stack EMS" statt "NRGEMS"
   (`library.json`→`name`, `module.json`→`aliases`). GUID, `module.json`→`name` (PHP-
