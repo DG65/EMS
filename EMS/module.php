@@ -256,6 +256,7 @@ class EMS extends IPSModule
 
         // ── NRG-Stack Discovery (additiv, siehe discoverPartners()) ──
         $this->RegisterAttributeString('PartnerCache', '{}');
+        $this->RegisterAttributeString('UnresponsiveInstances', '{}');
         $this->RegisterVariableString('EMS_Partners', 'NRG-Stack Partnermodule', '', 5);
         $this->RegisterVariableString('EMS_Situation', 'Steuerhoheit (Situation A/B)', '', 6);
         $this->RegisterVariableString('EMS_FederationHealth', 'Verbund-Gesundheit', '', 7);
@@ -493,6 +494,31 @@ class EMS extends IPSModule
         $partners['heishamon']   = $this->discoverContract(GUID_HEISHAMON,   'HEISHA_GetFunctions');
         $partners['tessie']      = $this->discoverContract(GUID_TESSIEVEHICLE, 'TESSIE_GetVehicleState');
 
+        // Installiert-aber-nicht-geantwortet erkennen (Dietmars Wunsch 29.07.2026,
+        // ausgeloest durch den discoverContract()-JSON-String-Bug: eine Instanz kann
+        // installiert sein, aber ihr Vertragsaufruf schlaegt fehl/wirft/liefert
+        // Unerwartetes -- das darf nicht mehr stillschweigend verschwinden. Vergleicht
+        // pro Modul die installierten Instanz-IDs (IPS_GetInstanceListByModuleID) mit
+        // den tatsaechlich erfolgreich geparsten (instanceID in $results).
+        $moduleGuids = array(
+            'inverterhub' => GUID_INVERTERHUB,
+            'meterhub'    => GUID_METERHUB,
+            'chargerhub'  => GUID_CHARGERHUB,
+            'heishamon'   => GUID_HEISHAMON,
+            'tessie'      => GUID_TESSIEVEHICLE,
+        );
+        $unresponsive = array();
+        foreach ($moduleGuids as $key => $guid) {
+            $installed = IPS_GetInstanceListByModuleID($guid);
+            if (empty($installed)) { continue; }
+            $foundIds = array_column((array)$partners[$key], 'instanceID');
+            $missing  = array_diff($installed, $foundIds);
+            if (!empty($missing)) {
+                $unresponsive[$key] = array_values(array_map('intval', $missing));
+            }
+        }
+        $this->WriteAttributeString('UnresponsiveInstances', json_encode($unresponsive));
+
         // Tibber liefert keine *_GetFunctions-Liste, sondern eigene Getter
         // pro Instanz (Preiskurve/Tarif/aktive Fremdsteuerung).
         $tibberInstances = array();
@@ -645,6 +671,23 @@ class EMS extends IPSModule
 
         $unhealthy = array_values(array_filter($entries, function ($e) { return !$e['healthy']; }));
 
+        // Installiert, aber nicht (mehr) antwortend -- siehe Discover()/UnresponsiveInstances.
+        // Getrennt von $unhealthy, weil diese Instanzen gar nicht erst in GetPartners()
+        // auftauchen (ihr Vertragsaufruf ist fehlgeschlagen), also auch keinen eigenen
+        // InstanceStatus-Eintrag oben durchlaufen haben.
+        $unresponsiveRaw = json_decode($this->ReadAttributeString('UnresponsiveInstances'), true);
+        if (!is_array($unresponsiveRaw)) { $unresponsiveRaw = array(); }
+        $missing = array();
+        foreach ($unresponsiveRaw as $module => $ids) {
+            foreach ((array)$ids as $id) {
+                $missing[] = array(
+                    'module'     => $module,
+                    'instanceID' => (int)$id,
+                    'label'      => IPS_InstanceExists($id) ? IPS_GetName($id) : '(geloescht)',
+                );
+            }
+        }
+
         $summary = sprintf(
             '%d/%d Partnerinstanzen gesund',
             count($entries) - count($unhealthy), count($entries)
@@ -655,6 +698,12 @@ class EMS extends IPSModule
             }, $unhealthy);
             $summary .= ' -- auffaellig: ' . implode(', ', $labels);
         }
+        if (!empty($missing)) {
+            $labels = array_map(function ($m) {
+                return $m['label'] . ' (' . $m['module'] . ')';
+            }, $missing);
+            $summary .= ' -- installiert, aber ohne Antwort: ' . implode(', ', $labels);
+        }
 
         $this->SetValue('EMS_FederationHealth', $summary);
 
@@ -663,6 +712,8 @@ class EMS extends IPSModule
             'total'        => count($entries),
             'healthyCount' => count($entries) - count($unhealthy),
             'unhealthy'    => $unhealthy,
+            'missingCount' => count($missing),
+            'missing'      => $missing,
             'entries'      => $entries,
         );
     }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0 (2026-07-29)
+- **Neu, Dietmars Wunsch**: "Installiert, aber ohne Antwort" wird jetzt erkannt statt
+  stillschweigend zu verschwinden — genau der Fall, der den discoverContract()-Bug (0.10.7)
+  zwei Wochen unbemerkt gemacht hat. `Discover()` vergleicht pro Partnermodul die installierten
+  Instanz-IDs (`IPS_GetInstanceListByModuleID`) mit den erfolgreich geparsten — Differenz wird
+  persistent (`UnresponsiveInstances`) gespeichert. `EMS_GetFederationHealth()` liefert additiv
+  `missingCount`/`missing` und nennt betroffene Instanzen jetzt auch im Klartext-Summary.
+  **Bewusst NICHT umgesetzt** (zu speculative, Risiko von Fehlalarmen): historische Soll/Ist-
+  Zähler-Verfolgung ("gestern 6, heute 4") zur Unterscheidung von absichtlichem Löschen vs.
+  echtem Ausfall — dafür bräuchte es zusätzliche Heuristik, die vorerst zurückgestellt wird.
+
 ## 0.10.7 (2026-07-29)
 - **Kritischer Discovery-Fix, gefunden von Dashboard**: `discoverContract()` prüfte nur
   `is_array($data)`, ohne vorher JSON-Strings zu dekodieren. `MHUB_GetFunctions()` und
