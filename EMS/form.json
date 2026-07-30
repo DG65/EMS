@@ -947,6 +947,57 @@
                 },
                 {
                     "type": "Label",
+                    "caption": "── 🌱 Grünste Ladezeit (optional, unabhängig von Preis) ─"
+                },
+                {
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "CheckBox",
+                            "name": "GREEN_Charge_Enabled",
+                            "caption": "Bei sehr grünem Strommix zusätzlich aus dem Netz laden (braucht StromGedacht)"
+                        },
+                        {
+                            "type": "PopupButton",
+                            "caption": "?",
+                            "width": "70px",
+                            "popup": {
+                                "caption": "Grünste Ladezeit -- was macht das?",
+                                "items": [
+                                    {
+                                        "type": "Label",
+                                        "caption": "Standardmäßig AUS. Braucht eine installierte StromGedacht-Instanz mit aktiviertem GrünstromIndex (GSI). Wenn aktiviert, lädt EMS zusätzlich zur normalen Preislogik aus dem Netz, sobald der GSI über dem eingestellten Schwellwert liegt -- unabhängig vom Strompreis."
+                                    },
+                                    {
+                                        "type": "Label",
+                                        "caption": "v1: reine Momentaufnahme (aktueller GSI-Wert), keine Vorausschau über mehrere Stunden. Der GSI-Wert (0-100, höher=grüner) kommt von der Corrently GrünstromIndex-API über StromGedacht."
+                                    }
+                                ],
+                                "buttons": [
+                                    {
+                                        "type": "Button",
+                                        "caption": "Verstanden",
+                                        "onClick": ""
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "GREEN_GSI_Threshold",
+                    "caption": "GSI-Schwellwert (ab wann \"grün genug\")",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "visible": {
+                        "type": "PropertyCondition",
+                        "property": "GREEN_Charge_Enabled",
+                        "value": true
+                    }
+                },
+                {
+                    "type": "Label",
                     "caption": "── Tibber Variablen ──────────────────────────────────"
                 },
                 {

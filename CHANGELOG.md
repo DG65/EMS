@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.0 (2026-07-29)
+- **Neu: Grünste Ladezeit** (Vorbild evcc, optional, Default AUS) — neue Properties
+  `GREEN_Charge_Enabled`/`GREEN_GSI_Threshold` (Default 66, entspricht StromGedachts eigener
+  "hoch/grün"-Einstufung). Lädt zusätzlich zur Preislogik aus dem Netz, wenn der aktuelle
+  GrünstromIndex (StromGedacht, Corrently-API) über dem Schwellwert liegt. Neue Discovery
+  für StromGedacht (`GUID_STROMGEDACHT`, GUID von StromGedacht selbst bestätigt, nicht
+  geraten). **Bewusst v1, nur Momentaufnahme** (`SGW_GetState()`), keine mehrstündige
+  Vorausschau — StromGedacht hat zwar parallel `SGW_GetForecast()` um source='gsi'/
+  'energycharts' erweitert, ein Ausbau auf echte Vorausschau bleibt ein späterer,
+  separater Schritt.
+
 ## 0.12.0 (2026-07-29)
 - **Neu: Batterie-Boost** (Vorbild evcc) — manuell auslösbarer, zeitlich begrenzter Modus
   (`EMS_StartBatteryBoost($id, $minutes)`/`EMS_StopBatteryBoost($id)`, Buttons + Dauer-Feld im

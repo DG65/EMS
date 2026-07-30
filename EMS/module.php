@@ -49,6 +49,11 @@ define('GUID_HEISHAMON',     '{1919151A-3C0F-4C09-B906-291638EC1469}');
 define('GUID_TESSIEVEHICLE', '{3F1F7E31-8BA0-4B8F-9B62-47DAD7A0B6C9}');
 define('GUID_TIBBERGRIDREWARD', '{E92F62F4-88A6-4C6E-9F0D-E76C3B1C9A01}');
 
+// StromGedacht (GSI/Energy-Charts-Signal fuer "gruenste Ladezeit", siehe
+// getCurrentGreenScore()/optimize()-Branch 2b). GUID von StromGedacht
+// selbst bestaetigt, nicht geraten (29.07.2026).
+define('GUID_STROMGEDACHT', '{D5A8C3A1-2222-4A55-8888-123456789003}');
+
 // PV-Erzeugungsprognose (PVF_GetForecast-Vertrag: 96 15-Min-Slots p10/p50/p90
 // in Watt, offset 0=heute/1=morgen) -- ersetzt die alte VAR_FC_JSON-Property,
 // siehe parseForecastNextHours()/parseForecastForSlots().
@@ -159,6 +164,10 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('WB_Min_Charge_Min',    5);
         $this->RegisterPropertyInteger('BOOST_Duration_Min',   30);
         $this->RegisterPropertyInteger('SITE_Max_Grid_Import_W', 0);
+
+        // ── Gruenste Ladezeit (optional, Vorbild evcc) ──────────────
+        $this->RegisterPropertyBoolean('GREEN_Charge_Enabled',  false);
+        $this->RegisterPropertyInteger('GREEN_GSI_Threshold',   66);
         for ($i = 1; $i <= 2; $i++) {
             $this->RegisterPropertyInteger('WB' . $i . '_Instance',   0);
             $this->RegisterPropertyInteger('WB' . $i . '_Max_Power_W',11000);
@@ -966,6 +975,35 @@ class EMS extends IPSModule
         if (!function_exists('PVF_GetForecast')) { return 0; }
         $list = IPS_GetInstanceListByModuleID(GUID_PVFORECAST);
         return !empty($list) ? $list[0] : 0;
+    }
+
+    private function getStromGedachtInstance()
+    {
+        if (!function_exists('SGW_GetState')) { return 0; }
+        $list = IPS_GetInstanceListByModuleID(GUID_STROMGEDACHT);
+        return !empty($list) ? $list[0] : 0;
+    }
+
+    /**
+     * Aktueller Gruenstrom-Score (0-100, hoeher=gruener), aus StromGedachts
+     * GSI-Momentaufnahme (SGW_GetState()['gsi']). Bewusst NUR der Ist-Wert
+     * (v1, 29.07.2026) -- StromGedachts SGW_GetForecast() liefert seit heute
+     * zwar auch source='gsi' als Zeitfenster-Vorschau, aber genau wie unsere
+     * bestehende Preis-Schwellwertlogik (kein volles Preis-Optimierungsmodell)
+     * reicht fuer den Anfang ein einfacher Schwellwert auf den Ist-Zustand.
+     * Ausbau auf echte Vorausschau (analog PVF/LFC) waere ein spaeterer,
+     * separater Schritt. Liefert null, wenn kein StromGedacht installiert
+     * ist oder gsi nicht verfuegbar ist (Quelle deaktiviert o.ae.).
+     */
+    private function getCurrentGreenScore()
+    {
+        $sgwId = $this->getStromGedachtInstance();
+        if ($sgwId <= 0) { return null; }
+        $state = SGW_GetState($sgwId);
+        if (!is_array($state) || !isset($state['gsi']) || $state['gsi'] === null) {
+            return null;
+        }
+        return (float)$state['gsi'];
     }
 
     /**
@@ -1958,6 +1996,29 @@ class EMS extends IPSModule
                 'Tibber guenstig, aber PV-Vorschau %.1f kWh deckt Bedarf %.1f kWh → kein Netzladen',
                 $s['fc_next_kwh'], $missingKwh
             ));
+        }
+
+        // ── 2b. Gruenste Ladezeit → Netz laden (optional, Vorbild evcc) ──
+        // Alternative zu Branch 2: laedt auch dann aus dem Netz, wenn der
+        // Strommix gerade sehr gruen ist, unabhaengig vom Preis. Bewusst
+        // standardmaessig deaktiviert (GREEN_Charge_Enabled=false) -- nicht
+        // jeder hat StromGedacht installiert oder will nach Gruenstrom statt
+        // Preis optimieren (siehe "keine eigene Anlage als Norm"-Regel).
+        if ($this->ReadPropertyBoolean('GREEN_Charge_Enabled') && $s['bat_active'] && $soc < ($socTargetNight - $hystSoc)) {
+            $greenScore = $this->getCurrentGreenScore();
+            $greenThreshold = (float)$this->ReadPropertyInteger('GREEN_GSI_Threshold');
+            if ($greenScore !== null && $greenScore >= $greenThreshold) {
+                $d['op_mode']    = EMS_OP_NET_CHARGE;
+                $d['gw_mode']    = GW_MODE_AC_IMPORT;
+                $d['gw_power_w'] = (int)$maxW;
+                $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
+                $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
+                $d['reason']     = sprintf(
+                    'Gruenste Ladezeit: GSI=%.0f >= %.0f, Netz laden',
+                    $greenScore, $greenThreshold
+                );
+                return $d;
+            }
         }
 
         // ── 3. PV-Ueberschuss → Eigenverbrauch ──────────────────────
