@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.14.0 (2026-07-30)
+- **Architektur-Fix, live bestätigt in beide Richtungen (InverterHub, 30.07.2026)**:
+  `ctl_ems_enable=true` versetzt den WR laut SEMS+-Portal explizit in einen "3rd party EMS"-
+  Zustand — die GESAMTE Entscheidungshoheit geht an das externe EMS, auch im Modus
+  "Automatik" (der WR wartet dann nur auf einen expliziten Sollwert, harvestet kaum, statt
+  autonom zu entscheiden). `ctl_ems_enable=false` gibt die volle autonome Selbstverbrauchs-
+  logik zurück. Bisher schrieb `setGoodweMode()` `ctl_ems_enable` immer als `true` fest.
+  Jetzt: neuer `$enable`-Parameter, vom Aufrufer gesteuert. Automatik-Fallback (Branch 7) und
+  `applyFallback()` setzen jetzt bewusst `enable=false` (WR soll wirklich autonom laufen),
+  alle anderen Branches (aktive Preis-/Grün-/Boost-Entscheidungen) bleiben bei `enable=true`.
+  Cooldown/Reassert-Logik berücksichtigt jetzt auch Enable-Wechsel, nicht nur Modus-Wechsel.
+
 ## 0.13.0 (2026-07-29)
 - **Neu: Grünste Ladezeit** (Vorbild evcc, optional, Default AUS) — neue Properties
   `GREEN_Charge_Enabled`/`GREEN_GSI_Threshold` (Default 66, entspricht StromGedachts eigener

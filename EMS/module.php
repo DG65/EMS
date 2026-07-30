@@ -255,6 +255,7 @@ class EMS extends IPSModule
 
         // ── Interne Attribute ───────────────────────────────────────
         $this->RegisterAttributeInteger('LastGoodweMode',    GW_MODE_AUTO);
+        $this->RegisterAttributeBoolean('LastGoodweEnable',  true);
         $this->RegisterAttributeInteger('LastWB1Switch',     0);
         $this->RegisterAttributeInteger('LastWB2Switch',     0);
         $this->RegisterAttributeInteger('LastDecision',      0);
@@ -1885,6 +1886,14 @@ class EMS extends IPSModule
             'op_mode'    => EMS_OP_AUTO,
             'gw_mode'    => GW_MODE_AUTO,
             'gw_power_w' => 0,
+            // ctl_ems_enable: true = EMS uebernimmt aktiv die Kontrolle (WR
+            // wartet auf einen expliziten Sollwert), false = WR laeuft komplett
+            // autonom mit seiner eigenen Selbstverbrauchslogik. Live bestaetigt
+            // 30.07.2026 (InverterHub, in beide Richtungen reproduziert): das
+            // SEMS+-Portal zeigt bei enable=true explizit "3rd party EMS" an --
+            // der WR uebergibt dann die GESAMTE Entscheidungshoheit, auch im
+            // Modus "Automatik". Nur im Fallback-Branch (7) bewusst false.
+            'gw_enable'  => true,
             'wb1_enable' => false,
             'wb2_enable' => false,
             'reason'     => '',
@@ -2066,12 +2075,19 @@ class EMS extends IPSModule
         $wb2En = ($s['wb_active'] && $s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
 
         // ── 7. Fallback: Automatik ───────────────────────────────────
+        // ctl_ems_enable=false setzen (siehe Kommentar bei $d-Initialisierung):
+        // live bestaetigt 30.07.2026, dass enable=true+mode=Automatik den WR
+        // in einen "3rd party EMS"-Wartezustand versetzt (kaum PV-Ernte, wartet
+        // auf expliziten Sollwert), waehrend enable=false die volle autonome
+        // Selbstverbrauchslogik des WR aktiviert -- genau das, was der Fallback
+        // eigentlich will.
         $d['op_mode']    = EMS_OP_AUTO;
         $d['gw_mode']    = GW_MODE_AUTO;
         $d['gw_power_w'] = 0;
+        $d['gw_enable']  = false;
         $d['wb1_enable'] = $wb1En;
         $d['wb2_enable'] = $wb2En;
-        $d['reason']     = sprintf('Automatik: SOC=%.0f%% Preis=%.2fct PV=%.0fW', $soc, $price, $pvW);
+        $d['reason']     = sprintf('Automatik (WR autonom, ctl_ems_enable=false): SOC=%.0f%% Preis=%.2fct PV=%.0fW', $soc, $price, $pvW);
         return $d;
     }
 
@@ -2155,6 +2171,7 @@ class EMS extends IPSModule
     private function applyDecision($d, $s)
     {
         $lastMode     = $this->ReadAttributeInteger('LastGoodweMode');
+        $lastEnable   = $this->ReadAttributeBoolean('LastGoodweEnable');
         $cooldown     = $this->ReadPropertyInteger('OPT_Cooldown_Sec');
         $lastDecision = $this->ReadAttributeInteger('LastDecision');
         $now          = time();
@@ -2171,20 +2188,22 @@ class EMS extends IPSModule
         // Thrashing zwischen Modi bei knapp schwankenden Schwellwerten) --
         // waehrend der Cooldown-Phase wird trotzdem der zuletzt aktive
         // Modus weiter reasserted, statt komplett zu pausieren.
-        $isGridRewards = ($d['op_mode'] === EMS_OP_GRIDREWARDS);
-        $modeChanging  = ($d['gw_mode'] !== $lastMode);
+        $isGridRewards  = ($d['op_mode'] === EMS_OP_GRIDREWARDS);
+        $gwEnable       = $d['gw_enable'] ?? true;
+        $modeChanging   = ($d['gw_mode'] !== $lastMode || $gwEnable !== $lastEnable);
 
         if ($modeChanging && !$isGridRewards && ($now - $lastDecision) < $cooldown) {
-            $this->emsLog(EMS_LOG_VERBOSE, 'Cooldown aktiv (' . ($now - $lastDecision) . 's < ' . $cooldown . 's) -- reassert letzter Modus ' . $lastMode);
-            $this->setGoodweMode($lastMode, 0);
+            $this->emsLog(EMS_LOG_VERBOSE, 'Cooldown aktiv (' . ($now - $lastDecision) . 's < ' . $cooldown . 's) -- reassert letzter Modus ' . $lastMode . '/enable=' . ($lastEnable ? '1' : '0'));
+            $this->setGoodweMode($lastMode, 0, $lastEnable);
             return;
         }
 
-        $this->setGoodweMode($d['gw_mode'], $d['gw_power_w']);
+        $this->setGoodweMode($d['gw_mode'], $d['gw_power_w'], $gwEnable);
         if ($modeChanging || $isGridRewards) {
-            $this->WriteAttributeInteger('LastGoodweMode', $d['gw_mode']);
-            $this->WriteAttributeInteger('LastDecision',   $now);
-            $this->emsLog(EMS_LOG_BASIC, 'Goodwe -> Modus ' . $d['gw_mode'] . ' | ' . $d['reason']);
+            $this->WriteAttributeInteger('LastGoodweMode',   $d['gw_mode']);
+            $this->WriteAttributeBoolean('LastGoodweEnable', $gwEnable);
+            $this->WriteAttributeInteger('LastDecision',     $now);
+            $this->emsLog(EMS_LOG_BASIC, 'Goodwe -> Modus ' . $d['gw_mode'] . ' (enable=' . ($gwEnable ? '1' : '0') . ') | ' . $d['reason']);
         } else {
             $this->emsLog(EMS_LOG_VERBOSE, 'Goodwe -> Modus ' . $d['gw_mode'] . ' (reassert) | ' . $d['reason']);
         }
@@ -2223,7 +2242,7 @@ class EMS extends IPSModule
      * InverterHubs ctl_ems_mode adressiert, deshalb keine Modus-Uebersetzung
      * noetig. Fallback: alte manuelle Variablenverknuepfung.
      */
-    private function setGoodweMode($mode, $powerW)
+    private function setGoodweMode($mode, $powerW, $enable = true)
     {
         $inv = $this->getInverterEntry();
 
@@ -2241,12 +2260,18 @@ class EMS extends IPSModule
                 // IPS_RequestAction($InstanceID, $Ident, $Value) (siehe ChargerHub-Befund
                 // 25.07.2026, gleiche Ursache bei InverterHub).
                 //
-                // ctl_ems_enable (Register 47505) ist der Hauptschalter, der die
-                // EMS-Steuerung am WR ueberhaupt erst scharf schaltet -- ohne ihn
-                // ignoriert der Goodwe jede ctl_ems_mode/ctl_ems_power-Vorgabe und
-                // faehrt seine eigene Selbstverbrauchs-Logik (Fund 25.07.2026: Batterie
-                // entlud trotz korrekt gesetztem Modus=3 nicht, weil enable=false war).
-                IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', true);
+                // ctl_ems_enable (Register 47505) ist der Hauptschalter. Zwei
+                // gegenlaeufige, beide live bestaetigte Effekte:
+                // - =false: Goodwe ignoriert ctl_ems_mode/ctl_ems_power komplett und
+                //   faehrt seine eigene Selbstverbrauchslogik (Fund 25.07.2026).
+                // - =true: SEMS+-Portal zeigt "3rd party EMS", der WR uebergibt die
+                //   GESAMTE Entscheidungshoheit an uns -- "Automatik"+enable=true
+                //   heisst dann "warte auf expliziten Sollwert", nicht "WR entscheidet
+                //   selbst" (Fund 30.07.2026, in beide Richtungen reproduziert).
+                // Deshalb schreibt der Aufrufer (optimize()) jetzt explizit, ob er
+                // gerade wirklich die Kontrolle will ($enable=true) oder den WR
+                // autonom laufen lassen will ($enable=false, siehe Fallback-Branch 7).
+                IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', (bool)$enable);
                 IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
                 // IMMER schreiben, auch 0 -- ctl_ems_power (Register 47512) ist in
                 // GW_MODE_CHARGE_PV keine additive Zusatzleistung, sondern eine
@@ -2381,7 +2406,11 @@ class EMS extends IPSModule
     {
         $fallbackMode = $this->ReadPropertyInteger('EMS_Fallback_Mode');
         $this->emsLog(EMS_LOG_BASIC, 'Fallback aktiv - Goodwe Modus ' . $fallbackMode);
-        $this->setGoodweMode($fallbackMode, 0);
+        // enable=false: bei wiederholten Kommunikationsfehlern kann EMS ohnehin
+        // keinen verlaesslichen Sollwert mehr liefern -- der WR soll dann autonom
+        // laufen (siehe Fund 30.07.2026), nicht scharfgeschaltet auf einen
+        // Sollwert warten, der wegen der Kommunikationsstoerung ausbleibt.
+        $this->setGoodweMode($fallbackMode, 0, false);
         $this->SetValue('EMS_Status', 'FALLBACK - Kommunikationsfehler');
         $this->SetStatus(200);
     }
