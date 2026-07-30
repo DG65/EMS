@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.7 (2026-07-29)
+- **Kritischer Discovery-Fix, gefunden von Dashboard**: `discoverContract()` prüfte nur
+  `is_array($data)`, ohne vorher JSON-Strings zu dekodieren. `MHUB_GetFunctions()` und
+  `TESSIE_GetVehicleState()` liefern aber einen JSON-String zurück, kein PHP-Array — dadurch
+  wurden ALLE MeterHub-Instanzen (6 bei Dietmar) und alle Tessie-Fahrzeuge STILLSCHWEIGEND aus
+  `GetPartners()`/`GetFederationHealth()` ausgeschlossen, ohne Fehler/Log. Fix: `is_string($data)`
+  → `json_decode()` vor dem `is_array()`-Check. Betrifft nur `discoverContract()`, keine
+  Vertragsänderung.
+
 ## 0.10.6 (2026-07-29)
 - **Korrektur zu 0.10.5**: "NRGEMS" als Alias wieder entfernt — Dietmars Anweisung war, dass
   alte Bezeichnungen entfallen sollen, nicht nur ergänzt werden. Aliase jetzt nur noch

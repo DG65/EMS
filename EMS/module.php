@@ -551,6 +551,13 @@ class EMS extends IPSModule
         }
         foreach (IPS_GetInstanceListByModuleID($moduleGUID) as $id) {
             $data = call_user_func($function, $id);
+            // Manche Vertraege (MHUB_GetFunctions, TESSIE_GetVehicleState) liefern
+            // einen JSON-STRING statt eines PHP-Arrays -- ohne diesen Dekodierschritt
+            // schlug is_array() hier bisher STILL fehl (kein Fehler, kein Log), die
+            // Instanz wurde einfach uebersprungen. Gefunden von Dashboard 29.07.2026.
+            if (is_string($data)) {
+                $data = json_decode($data, true);
+            }
             if (is_array($data)) {
                 // GetFunctions-Verträge liefern Listen, GetVehicleState/GetState
                 // liefern ein einzelnes Objekt — beides normalisiert als Liste
