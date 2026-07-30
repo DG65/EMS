@@ -157,6 +157,8 @@ class EMS extends IPSModule
         $this->RegisterPropertyBoolean('WB_GridRewards_Active',false);
         $this->RegisterPropertyInteger('WB_Cooldown_Sec',      120);
         $this->RegisterPropertyInteger('WB_Min_Charge_Min',    5);
+        $this->RegisterPropertyInteger('BOOST_Duration_Min',   30);
+        $this->RegisterPropertyInteger('SITE_Max_Grid_Import_W', 0);
         for ($i = 1; $i <= 2; $i++) {
             $this->RegisterPropertyInteger('WB' . $i . '_Instance',   0);
             $this->RegisterPropertyInteger('WB' . $i . '_Max_Power_W',11000);
@@ -248,6 +250,7 @@ class EMS extends IPSModule
         $this->RegisterAttributeInteger('LastWB2Switch',     0);
         $this->RegisterAttributeInteger('LastDecision',      0);
         $this->RegisterAttributeInteger('ConsecutiveErrors', 0);
+        $this->RegisterAttributeInteger('BatteryBoostUntil', 0);
 
         // ── Sondereffekt-Ereignisliste (externe Regeleingriffe, siehe
         // EMS_GetSpecialEvents()/trackSpecialEvents() -- lernende Module
@@ -348,6 +351,10 @@ class EMS extends IPSModule
                     'type'    => 'Button',
                     'caption' => '🔎 Jetzt neu suchen',
                     'onClick' => 'EMS_Discover($id);'
+                ),
+                array(
+                    'type'    => 'Label',
+                    'caption' => $this->getBoostStatusLine(),
                 ),
             )
         ));
@@ -1188,6 +1195,45 @@ class EMS extends IPSModule
     }
 
     /**
+     * Startet den Batterie-Boost fuer $minutes Minuten (Default 30): Batterie
+     * entlaedt mit maximaler Leistung, alle Wallboxen werden freigegeben --
+     * fuer schnelles Nachladen kurz vor Abfahrt, unabhaengig von der
+     * normalen Preis-/PV-Logik. Bricht automatisch ab, sobald SOC die
+     * Reserve-Grenze erreicht (siehe optimize()).
+     */
+    public function StartBatteryBoost($minutes = 30)
+    {
+        $minutes = max(1, min(180, (int)$minutes));
+        $this->WriteAttributeInteger('BatteryBoostUntil', time() + $minutes * 60);
+        $this->emsLog(EMS_LOG_BASIC, sprintf('🚀 Batterie-Boost gestartet fuer %d Minuten', $minutes));
+        $this->Update();
+    }
+
+    /**
+     * Beendet einen laufenden Batterie-Boost sofort.
+     */
+    public function StopBatteryBoost()
+    {
+        $this->WriteAttributeInteger('BatteryBoostUntil', 0);
+        $this->emsLog(EMS_LOG_BASIC, 'Batterie-Boost manuell beendet');
+        $this->Update();
+    }
+
+    /**
+     * Statuszeile fuers Formular: laufender Boost mit Restzeit, oder Hinweis
+     * dass keiner aktiv ist.
+     */
+    private function getBoostStatusLine()
+    {
+        $until = $this->ReadAttributeInteger('BatteryBoostUntil');
+        if ($until > time()) {
+            $remainMin = (int)ceil(($until - time()) / 60);
+            return sprintf('🚀 Batterie-Boost aktiv, noch ca. %d Min.', $remainMin);
+        }
+        return 'Batterie-Boost: nicht aktiv';
+    }
+
+    /**
      * Goodwe ECO-Zeitfenster setzen
      * Zeitformat: High Byte = Stunden (0-23), Low Byte = Minuten (0-59)
      * Beispiel: 02:30 -> (2 << 8) | 30 = 542
@@ -1828,6 +1874,35 @@ class EMS extends IPSModule
             return $d;
         }
 
+        // ── Batterie-Boost (Nutzerwunsch 29.07.2026, Vorbild evcc) ──────
+        // Manuell ausgeloester, zeitlich begrenzter Modus: Batterie entlaedt
+        // mit maximaler Leistung, alle Wallboxen werden freigegeben, damit ein
+        // Fahrzeug moeglichst schnell laedt (z.B. kurz vor Abfahrt) --
+        // unabhaengig von Preis-/PV-Logik. Ueberstimmt bewusst nichts an der
+        // Batterie-Reserve (socMin+Reserve bleibt Grenze), damit der Boost nicht
+        // die Notreserve leerfahren kann.
+        $boostUntil = $this->ReadAttributeInteger('BatteryBoostUntil');
+        if ($boostUntil > time()) {
+            $socMinBoost = (float)$this->ReadPropertyInteger('BAT_SOC_Min')
+                + (float)$this->ReadPropertyInteger('BAT_SOC_Reserve_Backup');
+            if ($s['bat_active'] && $s['bat_soc'] > $socMinBoost) {
+                $d['op_mode']    = EMS_OP_DISCHARGE;
+                $d['gw_mode']    = GW_MODE_DISCHARGE;
+                $d['gw_power_w'] = (int)$this->ReadPropertyInteger('EMS_Max_Power_W');
+                $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
+                $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
+                $d['reason']     = sprintf(
+                    '🚀 Batterie-Boost aktiv (noch %ds): volle Entladung fuer Schnellladen, SOC=%.0f%%',
+                    $boostUntil - time(), $s['bat_soc']
+                );
+                return $d;
+            }
+            // SOC-Grenze erreicht -- Boost frueher als geplant beenden, statt
+            // stumm weiterzulaufen und die Reserve anzugreifen.
+            $this->WriteAttributeInteger('BatteryBoostUntil', 0);
+            $this->emsLog(EMS_LOG_BASIC, 'Batterie-Boost vorzeitig beendet: SOC-Reserve erreicht');
+        }
+
         $socMin         = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
         $socTargetNight = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
         $socTargetDay   = $this->getDynamicSocTargetDay();
@@ -1943,6 +2018,79 @@ class EMS extends IPSModule
     //  Layer 5: Steuerungs-Layer
     // ----------------------------------------------------------------
 
+    /**
+     * Schuetzt den Netzanschluss vor Ueberlast, wenn mehrere Wallboxen (und
+     * die uebrige Grundlast) zusammen mehr ziehen wuerden als konfiguriert
+     * erlaubt (`SITE_Max_Grid_Import_W`, 0=deaktiviert). Schaltet bei
+     * Ueberschreitung die Wallbox(en) mit der niedrigsten Prioritaet
+     * (hoechste `WB{n}_Priority`-Zahl) ab, bis das Budget eingehalten wird.
+     * Reine Enable/Disable-Entscheidung auf EMS-Ebene -- die eigentliche
+     * Strombegrenzung je Ladepunkt bleibt ChargerHubs Aufgabe.
+     */
+    private function enforceGridImportBudget(&$d, $s)
+    {
+        $limit = (float)$this->ReadPropertyInteger('SITE_Max_Grid_Import_W');
+        if ($limit <= 0) {
+            return; // Feature deaktiviert
+        }
+
+        $wbs = array(
+            1 => array(
+                'enable'   => $d['wb1_enable'],
+                'currentW' => $s['wb1_pow_kw'] * 1000,
+                'maxW'     => (float)$this->ReadPropertyInteger('WB1_Max_Power_W'),
+                'priority' => (int)$this->ReadPropertyInteger('WB1_Priority'),
+            ),
+        );
+        if ($s['wb_count'] >= 2) {
+            $wbs[2] = array(
+                'enable'   => $d['wb2_enable'],
+                'currentW' => $s['wb2_pow_kw'] * 1000,
+                'maxW'     => (float)$this->ReadPropertyInteger('WB2_Max_Power_W'),
+                'priority' => (int)$this->ReadPropertyInteger('WB2_Priority'),
+            );
+        }
+
+        // Projizierten Netzbezug schaetzen: aktueller Bezug, angepasst um
+        // die geplanten Aenderungen je Wallbox (neu an: + max. Leistung als
+        // Worst-Case, neu aus: - zuletzt gemessene Leistung).
+        $projected = $s['grid_total_w'];
+        foreach ($wbs as $wb) {
+            $wasOn = $wb['currentW'] > 100;
+            if ($wb['enable'] && !$wasOn) {
+                $projected += $wb['maxW'];
+            } elseif (!$wb['enable'] && $wasOn) {
+                $projected -= $wb['currentW'];
+            }
+        }
+        if ($projected <= $limit) {
+            return; // Budget eingehalten
+        }
+
+        // Niedrigste Prioritaet zuerst abschalten (hoechste Prioritaetszahl).
+        uasort($wbs, function ($a, $b) { return $b['priority'] <=> $a['priority']; });
+        $overBy    = $projected - $limit;
+        $throttled = array();
+        foreach ($wbs as $num => $wb) {
+            if ($overBy <= 0) {
+                break;
+            }
+            if (!$wb['enable']) {
+                continue;
+            }
+            $d['wb' . $num . '_enable'] = false;
+            $overBy -= $wb['maxW'];
+            $throttled[] = 'WB' . $num;
+        }
+        if (!empty($throttled)) {
+            $d['reason'] .= sprintf(
+                ' | Lastverteilung: %s gedrosselt (Netzanschluss-Budget %.0fW, projiziert %.0fW)',
+                implode('+', $throttled), $limit, $projected
+            );
+            $this->emsLog(EMS_LOG_BASIC, 'Lastverteilungs-Budget ueberschritten: ' . implode('+', $throttled) . ' abgeschaltet');
+        }
+    }
+
     private function applyDecision($d, $s)
     {
         $lastMode     = $this->ReadAttributeInteger('LastGoodweMode');
@@ -1988,8 +2136,12 @@ class EMS extends IPSModule
             }
         }
 
-        // Wallboxen steuern
+        // Lastverteilung/Netzanschluss-Budget (Nutzerwunsch 29.07.2026, Vorbild
+        // evcc: Leistung ueber mehrere Ladepunkte verteilen, Netzanschluss vor
+        // Ueberlast schuetzen). Kann die Wallbox-Freigaben aus optimize() noch
+        // nachtraeglich zurücknehmen, bevor sie an ChargerHub geschickt werden.
         if ($s['wb_active']) {
+            $this->enforceGridImportBudget($d, $s);
             $this->controlWallbox(1, $d['wb1_enable']);
             if ($s['wb_count'] >= 2) {
                 $this->controlWallbox(2, $d['wb2_enable']);

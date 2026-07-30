@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.12.0 (2026-07-29)
+- **Neu: Batterie-Boost** (Vorbild evcc) — manuell auslösbarer, zeitlich begrenzter Modus
+  (`EMS_StartBatteryBoost($id, $minutes)`/`EMS_StopBatteryBoost($id)`, Buttons + Dauer-Feld im
+  Formular): Batterie entlädt mit maximaler Leistung, alle Wallboxen werden freigegeben, für
+  schnelles Nachladen kurz vor Abfahrt. Bricht automatisch ab, sobald SOC die
+  Reserve-Grenze (`BAT_SOC_Min` + `BAT_SOC_Reserve_Backup`) erreicht — kann die Notreserve nicht
+  leerfahren. Live-Statuszeile im "Verbund-Status"-Panel zeigt Restzeit.
+- **Neu: Lastverteilung/Netzanschluss-Budget** (Vorbild evcc) — neue Property
+  `SITE_Max_Grid_Import_W` (Default 0 = deaktiviert). Bei Überschreitung schaltet EMS die
+  Wallbox mit der niedrigsten Priorität (`WB{n}_Priority`) ab, bis der projizierte Netzbezug
+  wieder unter dem Limit liegt. Reine Enable/Disable-Entscheidung auf EMS-Ebene, ChargerHub
+  bleibt für die Strombegrenzung je Ladepunkt zuständig.
+- Beide Features standardmäßig folgenlos (Boost inaktiv, Budget deaktiviert) — kein Effekt für
+  bestehende Installationen ohne bewusste Aktivierung.
+
 ## 0.11.0 (2026-07-29)
 - **Neu, Dietmars Wunsch**: "Installiert, aber ohne Antwort" wird jetzt erkannt statt
   stillschweigend zu verschwinden — genau der Fall, der den discoverContract()-Bug (0.10.7)

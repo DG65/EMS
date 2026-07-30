@@ -617,6 +617,75 @@
                 },
                 {
                     "type": "Label",
+                    "caption": "── 🚀 Batterie-Boost (manuell, für schnelles Nachladen) ─"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "BOOST_Duration_Min",
+                    "caption": "Boost-Dauer (Minuten)",
+                    "minimum": 1,
+                    "maximum": 180,
+                    "suffix": " min"
+                },
+                {
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "Button",
+                            "caption": "🚀 Batterie-Boost starten",
+                            "onClick": "EMS_StartBatteryBoost($id, IPS_GetProperty($id, 'BOOST_Duration_Min'));"
+                        },
+                        {
+                            "type": "Button",
+                            "caption": "Boost stoppen",
+                            "onClick": "EMS_StopBatteryBoost($id);"
+                        }
+                    ]
+                },
+                {
+                    "type": "Label",
+                    "caption": "── ⚡ Lastverteilung / Netzanschluss-Budget (optional) ─"
+                },
+                {
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "NumberSpinner",
+                            "name": "SITE_Max_Grid_Import_W",
+                            "caption": "Max. Netzbezug gesamt (0 = deaktiviert)",
+                            "minimum": 0,
+                            "maximum": 100000,
+                            "suffix": " W"
+                        },
+                        {
+                            "type": "PopupButton",
+                            "caption": "?",
+                            "width": "70px",
+                            "popup": {
+                                "caption": "Lastverteilung -- wann brauche ich das?",
+                                "items": [
+                                    {
+                                        "type": "Label",
+                                        "caption": "Standardmäßig AUS (0) -- nicht für jeden nötig. Nur relevant, wenn dein Netzanschluss/deine Hauptsicherung ein hartes Limit hat, das durch mehrere gleichzeitig ladende Wallboxen plus Grundlast überschritten werden könnte."
+                                    },
+                                    {
+                                        "type": "Label",
+                                        "caption": "Bei Überschreitung schaltet EMS die Wallbox mit der niedrigsten Priorität (siehe WB{n}_Priority unten) ab, bis der Netzbezug wieder unter dem Limit liegt. Schützt vor einer ausgelösten Sicherung, ersetzt aber keine Elektroinstallations-Absicherung."
+                                    }
+                                ],
+                                "buttons": [
+                                    {
+                                        "type": "Button",
+                                        "caption": "Verstanden",
+                                        "onClick": ""
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "Label",
                     "caption": "Ab hier optionaler manueller Fallback -- normalerweise findet EMS ChargerHub-Instanzen automatisch. Nur ausfüllen für eine ältere, direkte go-e-Charger-Anbindung ohne ChargerHub."
                 },
                 {
