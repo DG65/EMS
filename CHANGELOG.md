@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.15.1 (2026-07-31)
+- **Fix an Branch 3b (0.15.0), live getestet bei Dietmar:** Export funktionierte, aber
+  nur teilweise ("exportiert mehr, aber nicht die volle mögliche Menge"). Ursache: der
+  Export-Zielwert wurde als `min(PV−Hausverbrauch, EMS_Max_Power_W)` berechnet — dabei
+  ist die gemessene `$pvW` in genau diesem Moment noch die GEDROSSELTE Leistung (das
+  Symptom des Problems selbst), ein daraus abgeleiteter kleiner Zielwert schreibt die
+  Drosselung nur fort statt sie aufzuheben. Deckt sich mit dem früheren Live-Befund, dass
+  nur ein aggressiver, hoher Zielwert (z. B. 9000 W) den WR zum vollen Hochfahren der
+  MPPT-Regelung bewegt. Jetzt: `gw_power_w` ist immer die volle `EMS_Max_Power_W` als
+  Ceiling (wie bei Boost/Discharge bereits üblich), kein aus der Ist-Leistung abgeleiteter
+  Wert mehr.
+
 ## 0.15.0 (2026-07-31)
 - **Neuer Branch 3b in `optimize()`: PV-Vollernte bei vollem Akku.** Bisher fiel die
   Entscheidung, sobald `soc >= socTargetDay`, durch alle Branches ohne Treffer und landete
