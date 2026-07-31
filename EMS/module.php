@@ -2048,6 +2048,31 @@ class EMS extends IPSModule
             return $d;
         }
 
+        // ── 3b. Akku am Ziel, PV-Ueberschuss trotzdem exportieren ────
+        // Luecke aus Branch 3: sobald soc >= socTargetDay faellt kein Branch mehr,
+        // Entscheidung landet im Automatik-Fallback (7, ctl_ems_enable=false). Live
+        // bestaetigt 30./31.07.2026 (InverterHub): der WR kappt dort die Erzeugung
+        // auf Eigenverbrauchsniveau statt den Ueberschuss zu exportieren, auch bei
+        // voller Sonne. Deckt sich mit einem von OpenEMS selbst offen markierten
+        // Randproblem (siehe SUITE.md "OpenEMS-Architekturanalyse": TODO in
+        // ApplyPowerHandler.handleRemoteMode "PV curtail" bei SOC=100%+Ueberschuss).
+        // Statt auf den autonomen Fallback zu vertrauen, hier explizit AC_EXPORT mit
+        // dem berechneten Ueberschuss (PV minus Hausverbrauch) anfordern.
+        $houseW   = (float)$s['house_pow_w'];
+        $surplusW = $pvW - $houseW;
+        if ($s['bat_active'] && $soc >= ($socTargetDay - $hystSoc) && $surplusW > $fcMinPower) {
+            $d['op_mode']    = EMS_OP_EXPORT;
+            $d['gw_mode']    = GW_MODE_AC_EXPORT;
+            $d['gw_power_w'] = (int)min($surplusW, $maxW);
+            $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
+            $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
+            $d['reason']     = sprintf(
+                'PV-Vollernte: Akku am Ziel (SOC=%.0f%%>=%.0f%%), Ueberschuss %.0fW exportieren statt Eigenverbrauchs-Deckelung',
+                $soc, $socTargetDay, $surplusW
+            );
+            return $d;
+        }
+
         // ── 4. Tibber teuer → Entladen ───────────────────────────────
         if ($s['tib_active'] && $s['bat_active'] && $price > ($thDischarge + $hystPrice) && $soc > ($socMin + $hystSoc + $socReserve)) {
             $d['op_mode']    = EMS_OP_DISCHARGE;

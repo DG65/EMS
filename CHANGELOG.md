@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.15.0 (2026-07-31)
+- **Neuer Branch 3b in `optimize()`: PV-Vollernte bei vollem Akku.** Bisher fiel die
+  Entscheidung, sobald `soc >= socTargetDay`, durch alle Branches ohne Treffer und landete
+  im Automatik-Fallback (`ctl_ems_enable=false`) — dort kappte der WR die Erzeugung live
+  bestätigt (InverterHub, 30./31.07.2026) auf Eigenverbrauchsniveau statt den PV-Überschuss
+  zu exportieren, auch bei voller Sonne. Deckt sich mit einem von OpenEMS selbst offen
+  markierten Randproblem (siehe SUITE.md "OpenEMS-Architekturanalyse": TODO in
+  `ApplyPowerHandler.handleRemoteMode`, "PV curtail" bei SOC=100%+Überschuss, dort ebenfalls
+  ungelöst). Neuer Branch prüft `soc >= socTargetDay-Hysterese && (PV-Hausverbrauch) >
+  FORECAST_Min_Power_W` und setzt dann explizit `GW_MODE_AC_EXPORT` mit dem berechneten
+  Überschusswert, statt auf den autonomen Fallback zu vertrauen.
+
 ## 0.14.0 (2026-07-30)
 - **Architektur-Fix, live bestätigt in beide Richtungen (InverterHub, 30.07.2026)**:
   `ctl_ems_enable=true` versetzt den WR laut SEMS+-Portal explizit in einen "3rd party EMS"-
