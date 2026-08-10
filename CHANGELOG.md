@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.16.0 (2026-08-07)
+- **`GetFederationHealth()` zeigt jetzt zusaetzlich die Prognose-Instanz (PVF/PVPrognose)**,
+  auf Wunsch von Dietmar/Dashboard fuer die NRGDashboardTopology-Visualisierung ("Verbund-
+  Gesundheit"-Sterngrafik zeichnet ausschliesslich das nach, was hier gemeldet wird).
+  Bewusst NICHT Teil von `GetPartners()`/`Discover()`/`PartnerCache` — die Prognose bleibt
+  kein Steuer-/Situations-Vertrag, der Health-Eintrag ist rein additiv fuer die Anzeige,
+  ohne Einfluss auf `optimize()`.
+- **WICHTIG, kein Feature — Notabschaltung:** `EMS_Active` wurde manuell deaktiviert
+  (03./04.08.2026), nachdem der in 0.15.0 eingefuehrte Branch 3b live zwischen sich selbst
+  und dem Automatik-Fallback (7) oszillierte (Sollwert-Sprung `enable=false`↔`enable=true`
+  bei jedem knappen Unter-/Ueberschreiten der Ueberschussschwelle) und dabei ueber zwei
+  Stunden PV-Spitzenertrag gekostet hat. Branch 3b bleibt bis zu einer Hysterese-/
+  Mindestverweildauer-Nachbesserung DEAKTIVIERT WARTEND, nicht in diesem Release behoben.
+
 ## 0.15.1 (2026-07-31)
 - **Fix an Branch 3b (0.15.0), live getestet bei Dietmar:** Export funktionierte, aber
   nur teilweise ("exportiert mehr, aber nicht die volle mögliche Menge"). Ursache: der

@@ -686,6 +686,24 @@ class EMS extends IPSModule
             }
         }
 
+        // Prognose (PVF) zusaetzlich als Health-Eintrag, OBWOHL sie bewusst kein
+        // Steuer-/Situations-Partner ist (siehe getPvfInstance()) -- fuer die
+        // Verbund-Topology-Visualisierung (NRGDashboardTopology) soll sie trotzdem
+        // sichtbar sein. Getrennt von $partners/GetPartners() gehalten, damit diese
+        // Erweiterung NICHT versehentlich zur Entscheidungslogik (optimize()) wird.
+        $pvfID = $this->getPvfInstance();
+        if ($pvfID > 0) {
+            $pvfStatus  = IPS_InstanceExists($pvfID) ? IPS_GetInstance($pvfID)['InstanceStatus'] : 0;
+            $pvfHealthy = ($pvfStatus === 102);
+            $entries[] = array(
+                'module'     => 'PVF',
+                'instanceID' => $pvfID,
+                'label'      => IPS_InstanceExists($pvfID) ? IPS_GetName($pvfID) : '(geloescht)',
+                'status'     => $pvfStatus,
+                'healthy'    => $pvfHealthy,
+            );
+        }
+
         $unhealthy = array_values(array_filter($entries, function ($e) { return !$e['healthy']; }));
 
         // Installiert, aber nicht (mehr) antwortend -- siehe Discover()/UnresponsiveInstances.
