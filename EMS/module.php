@@ -64,6 +64,13 @@ define('GUID_PVFORECAST', '{257DD4E8-9705-462E-89FC-56D0A1038353}');
 // Batterie-Tagesziel, siehe getDynamicSocTargetDay().
 define('GUID_LFC', '{DC5AD508-507F-40EA-8630-0959AED83050}');
 
+// Tile Visualization (WebFront-Kachelseite) -- fuer WFC_PushNotification()
+// Ziel-InstanceID. NIEMALS hart hinterlegen (Grundregel "keine eigene Anlage
+// als Norm"): jeder Nutzer hat eine andere Instanz-ID/andere Kachelseiten.
+// Property NOTIFY_Visualization_ID laesst den Nutzer explizit auswaehlen,
+// siehe GetVisualizationInstances()/checkFederationHealthAlarm().
+define('GUID_TILEVISUALIZATION', '{B5B875BB-9B76-45FD-4E67-2607E45B3AC4}');
+
 // GoodweET: Dietmars konsolidierter, tatsaechlich live laufender WR-Treiber
 // (nicht Teil des generischen InverterHub-*_GetFunctions-Vertrags, eigener,
 // einfacherer Vertrag: GetChannels()/ApplySetpoint()/AttachController()).
@@ -97,6 +104,21 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('EMS_Fallback_Mode',    GW_MODE_AUTO);
         $this->RegisterPropertyInteger('EMS_Fallback_Timeout', 60);
         $this->RegisterPropertyInteger('EMS_Log_Level',        EMS_LOG_BASIC);
+
+        // Aktive Ausfall-Benachrichtigung (Dietmar, 04.08.2026): passive Statuszeile
+        // reicht nicht, notwendige Verbindungsabbrueche muessen aktiv gemeldet werden.
+        // 0 = deaktiviert (Default -- kein Nutzer wird ungefragt mit Push zugespammt).
+        // Laeuft UNABHAENGIG von EMS_Active, siehe checkFederationHealthAlarm().
+        $this->RegisterPropertyInteger('NOTIFY_Visualization_ID', 0);
+        // Gnadenfrist, bevor ueberhaupt gemeldet wird (Dietmar, 04.08.2026):
+        // manche Verbindungen sind ABSICHTLICH temporaer weg (z.B. Tessie waehrend
+        // das Auto schlaeft, um API-Kontingent/Autobatterie zu schonen) -- generisch
+        // gehalten, nicht Tessie-spezifisch, da das theoretisch bei jedem Geraet
+        // vorkommen kann. Erst nach dieser Dauer ununterbrochener Stoerung wird
+        // wirklich alarmiert, siehe checkFederationHealthAlarm().
+        $this->RegisterPropertyInteger('NOTIFY_Grace_Minutes', 15);
+        $this->RegisterAttributeInteger('UnhealthySinceTs', 0);
+        $this->RegisterAttributeBoolean('LastHealthAlarmActive', false);
 
         // ── Netzmesspunkte ──────────────────────────────────────────
         $this->RegisterPropertyInteger('VAR_SM_L1_Power',      0);
@@ -421,6 +443,35 @@ class EMS extends IPSModule
             );
         }
 
+        // 5. "Benachrichtigungen" — aktive Ausfall-Meldung (Dietmar, 04.08.2026).
+        // Auswahlliste dynamisch aus GetVisualizationInstances(), NIE eine
+        // Instanz-ID hart hinterlegen -- jeder Nutzer hat andere Kachelseiten.
+        $form['elements'][] = array(
+            'type'     => 'ExpansionPanel',
+            'caption'  => '🔔 Benachrichtigungen',
+            'expanded' => false,
+            'items'    => array(
+                array(
+                    'type'    => 'Label',
+                    'caption' => 'Meldet aktiv per WebFront-Push, sobald ein notwendiger NRG-Stack-Partner ausfaellt oder nicht mehr antwortet (nicht nur passive Statuszeile oben). Laeuft unabhaengig davon, ob EMS gerade aktiv ist.'
+                ),
+                array(
+                    'type'    => 'Select',
+                    'name'    => 'NOTIFY_Visualization_ID',
+                    'caption' => 'Kachelseite für Push-Benachrichtigung',
+                    'options' => $this->GetVisualizationInstances(),
+                ),
+                array(
+                    'type'    => 'NumberSpinner',
+                    'name'    => 'NOTIFY_Grace_Minutes',
+                    'caption' => 'Gnadenfrist vor Meldung (Minuten) — verhindert Fehlalarm bei kurzen/erwarteten Unterbrechungen (z. B. Auto im Schlafmodus)',
+                    'minimum' => 0,
+                    'maximum' => 180,
+                    'suffix'  => ' min'
+                ),
+            )
+        );
+
         return json_encode($form);
     }
 
@@ -448,12 +499,23 @@ class EMS extends IPSModule
 
     public function Update()
     {
+        // Verbund-Gesundheitscheck + Ausfall-Meldung laeuft IMMER, auch wenn
+        // EMS_Active=false (z.B. waehrend einer Notabschaltung) -- ein reiner
+        // Diagnose-/Melde-Vorgang, keine Steuerentscheidung, siehe
+        // checkFederationHealthAlarm(). Fehler hier duerfen NICHT den
+        // ConsecutiveErrors-Fallback-Mechanismus fuer echte Steuerfehler ausloesen.
+        try {
+            $this->Discover(); // ruft GetFederationHealth() intern auf
+            $this->checkFederationHealthAlarm();
+        } catch (Exception $e) {
+            $this->emsLog(EMS_LOG_BASIC, 'Health-Check-Fehler (Meldung übersprungen): ' . $e->getMessage());
+        }
+
         if (!$this->ReadPropertyBoolean('EMS_Active')) {
             return;
         }
 
         try {
-            $this->Discover(); // Partnercache je Zyklus auffrischen, siehe getInverterEntry()/getWritableChargers()
             $state      = $this->readState();
             $this->updateStatusVars($state);
             $decision = $this->optimize($state);
@@ -751,6 +813,84 @@ class EMS extends IPSModule
             'missing'      => $missing,
             'entries'      => $entries,
         );
+    }
+
+    /**
+     * Findet alle installierten "Tile Visualization"-Instanzen (WebFront-
+     * Kachelseiten) fuer die Formular-Auswahlliste von NOTIFY_Visualization_ID.
+     * Oeffentlich, damit form.json sie live per Select-Value-Callback anzeigen
+     * kann -- NIE eine Instanz-ID hart hinterlegen (Grundregel "keine eigene
+     * Anlage als Norm"), jeder Nutzer hat andere IDs/andere Kachelseiten.
+     */
+    public function GetVisualizationInstances()
+    {
+        $out = array(array('caption' => '(deaktiviert)', 'value' => 0));
+        foreach (IPS_GetInstanceListByModuleID(GUID_TILEVISUALIZATION) as $id) {
+            $out[] = array(
+                'caption' => IPS_GetName($id) . ' (#' . $id . ')',
+                'value'   => $id,
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * Aktive Ausfall-Meldung (Dietmar, 04.08.2026): die passive Statuszeile in
+     * EMS_FederationHealth reicht nicht -- notwendige Verbindungsabbrueche
+     * muessen aktiv gemeldet werden, nicht nur irgendwo anzeigbar sein.
+     * Gnadenfrist (NOTIFY_Grace_Minutes) VOR dem ersten Alarm: manche
+     * Verbindungen sind ABSICHTLICH temporaer weg (z.B. Tessie waehrend das
+     * Auto schlaeft) -- generisch gehalten, nicht geraetespezifisch, das kann
+     * theoretisch jeden Partner betreffen. Erst danach + Debounce ueber
+     * LastHealthAlarmActive: meldet nur beim UEBERGANG gesund->ungesund (und
+     * einmalig bei der Erholung), nicht bei jedem Zyklus erneut.
+     */
+    private function checkFederationHealthAlarm()
+    {
+        $visID = $this->ReadPropertyInteger('NOTIFY_Visualization_ID');
+        if ($visID <= 0 || !function_exists('WFC_PushNotification')) {
+            return; // Feature deaktiviert oder WebFront-Push nicht verfuegbar
+        }
+
+        $health      = $this->GetFederationHealth();
+        $isUnhealthy = ($health['healthyCount'] < $health['total']) || ($health['missingCount'] > 0);
+        $wasAlarmed  = $this->ReadAttributeBoolean('LastHealthAlarmActive');
+        $since       = $this->ReadAttributeInteger('UnhealthySinceTs');
+        $graceSec    = max(0, $this->ReadPropertyInteger('NOTIFY_Grace_Minutes')) * 60;
+
+        if (!$isUnhealthy) {
+            if ($wasAlarmed) {
+                @WFC_PushNotification(
+                    $visID,
+                    '✅ NRG-Stack Verbund wieder normal',
+                    $health['summary'],
+                    'info',
+                    0
+                );
+                $this->WriteAttributeBoolean('LastHealthAlarmActive', false);
+            }
+            if ($since !== 0) {
+                $this->WriteAttributeInteger('UnhealthySinceTs', 0);
+            }
+            return;
+        }
+
+        // Ungesund -- Gnadenfrist starten, falls noch nicht laufend.
+        if ($since === 0) {
+            $this->WriteAttributeInteger('UnhealthySinceTs', time());
+            return; // erster Zyklus mit Stoerung: noch nicht alarmieren
+        }
+
+        if (!$wasAlarmed && (time() - $since) >= $graceSec) {
+            @WFC_PushNotification(
+                $visID,
+                '⚠️ NRG-Stack Verbund gestoert',
+                $health['summary'] . sprintf(' (seit %d Min. anhaltend)', (int)round((time() - $since) / 60)),
+                'alert',
+                0
+            );
+            $this->WriteAttributeBoolean('LastHealthAlarmActive', true);
+        }
     }
 
     /**

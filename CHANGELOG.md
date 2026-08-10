@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.17.0 (2026-08-09)
+- **Aktive Ausfall-Benachrichtigung** (Dietmar, 04.08.2026): Bisher zeigte
+  `GetFederationHealth()` nur eine passive Statuszeile (`EMS_FederationHealth`),
+  die niemand aktiv gemeldet bekam. Neu: `checkFederationHealthAlarm()` sendet bei
+  Uebergang gesund->ungesund (und einmalig bei Erholung) eine WebFront-Push-
+  Benachrichtigung ueber `WFC_PushNotification()`. Neue Property
+  `NOTIFY_Visualization_ID` (Default 0 = deaktiviert) laesst den Nutzer die
+  Ziel-Kachelseite explizit auswaehlen -- NIE hart hinterlegt, siehe neue
+  `GetVisualizationInstances()` (listet installierte "Tile Visualization"-
+  Instanzen dynamisch, Grundregel "keine eigene Anlage als Norm"). Der
+  Gesundheitscheck+Meldeversuch laeuft jetzt in `Update()` UNABHAENGIG von
+  `EMS_Active` (reiner Diagnosevorgang, keine Steuerentscheidung) -- wichtig
+  z.B. waehrend einer Notabschaltung wie der aktuellen.
+  **Gnadenfrist** (neue Property `NOTIFY_Grace_Minutes`, Default 15): manche
+  Partner sind ABSICHTLICH temporaer nicht erreichbar (z.B. Tessie waehrend das
+  Auto schlaeft, um API-Kontingent/Autobatterie zu schonen) -- generisch
+  gehalten, nicht geraetespezifisch, da das theoretisch jeden Partner betreffen
+  kann. Erst nach ununterbrochener Stoerung ueber diese Dauer wird wirklich
+  alarmiert, neues Attribut `UnhealthySinceTs` trackt den Beginn.
+  **Unverifiziert:** Die exakte Signatur/Icon-Werte von `WFC_PushNotification()`
+  sind nicht offiziell bestaetigt (Reflection auf Dietmars Instanz lieferte keine
+  brauchbaren Parameterinformationen fuer diese Kernel-Funktion). Vor Verlass auf
+  dieses Feature bitte einmal real testen (z.B. gezielt einen Partner kurz
+  deaktivieren) und Ergebnis rueckmelden.
+
 ## 0.16.0 (2026-08-07)
 - **`GetFederationHealth()` zeigt jetzt zusaetzlich die Prognose-Instanz (PVF/PVPrognose)**,
   auf Wunsch von Dietmar/Dashboard fuer die NRGDashboardTopology-Visualisierung ("Verbund-
