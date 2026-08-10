@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.17.1 (2026-08-09)
+- **Vollstaendige Verbund-Ueberwachung** (Dietmar, 04.08.2026: "alle Verbindungen
+  die wir generiert haben sehen und ueberwachen"): `GetFederationHealth()` zeigte
+  bisher nur PVF zusaetzlich zu den 7 originalen Steuer-Partnern
+  (GoodweET/InverterHub/MeterHub/ChargerHub/HeishaMon/Tessie/Tibber). Jetzt
+  zusaetzlich `LFC` (LoadForecast) und `StromGedacht` als Health-Eintraege (analog
+  PVF, weiterhin bewusst KEIN Teil von `GetPartners()`/`optimize()`). Die
+  "installiert-aber-nicht-antwortend"-Erkennung deckte bisher nur 5 der 7
+  Steuer-Partner ab (GoodweET und Tibber fehlten) -- jetzt alle 7. Da
+  `checkFederationHealthAlarm()` (0.17.0) direkt auf `GetFederationHealth()`
+  aufsetzt, gilt die aktive Ausfall-Benachrichtigung damit automatisch fuer
+  ALLE hier gelisteten Verbindungen, nicht nur die urspruenglichen.
+
 ## 0.17.0 (2026-08-09)
 - **Aktive Ausfall-Benachrichtigung** (Dietmar, 04.08.2026): Bisher zeigte
   `GetFederationHealth()` nur eine passive Statuszeile (`EMS_FederationHealth`),

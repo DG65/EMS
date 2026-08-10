@@ -573,31 +573,6 @@ class EMS extends IPSModule
         $partners['heishamon']   = $this->discoverContract(GUID_HEISHAMON,   'HEISHA_GetFunctions');
         $partners['tessie']      = $this->discoverContract(GUID_TESSIEVEHICLE, 'TESSIE_GetVehicleState');
 
-        // Installiert-aber-nicht-geantwortet erkennen (Dietmars Wunsch 29.07.2026,
-        // ausgeloest durch den discoverContract()-JSON-String-Bug: eine Instanz kann
-        // installiert sein, aber ihr Vertragsaufruf schlaegt fehl/wirft/liefert
-        // Unerwartetes -- das darf nicht mehr stillschweigend verschwinden. Vergleicht
-        // pro Modul die installierten Instanz-IDs (IPS_GetInstanceListByModuleID) mit
-        // den tatsaechlich erfolgreich geparsten (instanceID in $results).
-        $moduleGuids = array(
-            'inverterhub' => GUID_INVERTERHUB,
-            'meterhub'    => GUID_METERHUB,
-            'chargerhub'  => GUID_CHARGERHUB,
-            'heishamon'   => GUID_HEISHAMON,
-            'tessie'      => GUID_TESSIEVEHICLE,
-        );
-        $unresponsive = array();
-        foreach ($moduleGuids as $key => $guid) {
-            $installed = IPS_GetInstanceListByModuleID($guid);
-            if (empty($installed)) { continue; }
-            $foundIds = array_column((array)$partners[$key], 'instanceID');
-            $missing  = array_diff($installed, $foundIds);
-            if (!empty($missing)) {
-                $unresponsive[$key] = array_values(array_map('intval', $missing));
-            }
-        }
-        $this->WriteAttributeString('UnresponsiveInstances', json_encode($unresponsive));
-
         // Tibber liefert keine *_GetFunctions-Liste, sondern eigene Getter
         // pro Instanz (Preiskurve/Tarif/aktive Fremdsteuerung).
         $tibberInstances = array();
@@ -612,6 +587,36 @@ class EMS extends IPSModule
             $tibberInstances[] = $entry;
         }
         $partners['tibber'] = $tibberInstances;
+
+        // Installiert-aber-nicht-geantwortet erkennen (Dietmars Wunsch 29.07.2026,
+        // ausgeloest durch den discoverContract()-JSON-String-Bug: eine Instanz kann
+        // installiert sein, aber ihr Vertragsaufruf schlaegt fehl/wirft/liefert
+        // Unerwartetes -- das darf nicht mehr stillschweigend verschwinden. Vergleicht
+        // pro Modul die installierten Instanz-IDs (IPS_GetInstanceListByModuleID) mit
+        // den tatsaechlich erfolgreich geparsten (instanceID in $results). Erweitert
+        // 04.08.2026 um goodweet/tibber (Dietmars Wunsch: ALLE Verbindungen
+        // ueberwachen, nicht nur die urspruenglichen 5) -- deshalb hinter die
+        // Tibber-Erkennung verschoben, da $partners['tibber'] erst dort entsteht.
+        $moduleGuids = array(
+            'goodweet'    => GUID_GOODWEET,
+            'inverterhub' => GUID_INVERTERHUB,
+            'meterhub'    => GUID_METERHUB,
+            'chargerhub'  => GUID_CHARGERHUB,
+            'heishamon'   => GUID_HEISHAMON,
+            'tessie'      => GUID_TESSIEVEHICLE,
+            'tibber'      => GUID_TIBBERGRIDREWARD,
+        );
+        $unresponsive = array();
+        foreach ($moduleGuids as $key => $guid) {
+            $installed = IPS_GetInstanceListByModuleID($guid);
+            if (empty($installed)) { continue; }
+            $foundIds = array_column((array)$partners[$key], 'instanceID');
+            $missing  = array_diff($installed, $foundIds);
+            if (!empty($missing)) {
+                $unresponsive[$key] = array_values(array_map('intval', $missing));
+            }
+        }
+        $this->WriteAttributeString('UnresponsiveInstances', json_encode($unresponsive));
 
         $this->WriteAttributeString('PartnerCache', json_encode($partners));
 
@@ -748,21 +753,30 @@ class EMS extends IPSModule
             }
         }
 
-        // Prognose (PVF) zusaetzlich als Health-Eintrag, OBWOHL sie bewusst kein
-        // Steuer-/Situations-Partner ist (siehe getPvfInstance()) -- fuer die
-        // Verbund-Topology-Visualisierung (NRGDashboardTopology) soll sie trotzdem
-        // sichtbar sein. Getrennt von $partners/GetPartners() gehalten, damit diese
-        // Erweiterung NICHT versehentlich zur Entscheidungslogik (optimize()) wird.
-        $pvfID = $this->getPvfInstance();
-        if ($pvfID > 0) {
-            $pvfStatus  = IPS_InstanceExists($pvfID) ? IPS_GetInstance($pvfID)['InstanceStatus'] : 0;
-            $pvfHealthy = ($pvfStatus === 102);
+        // Optionale "weiche" Abhaengigkeiten zusaetzlich als Health-Eintrag,
+        // OBWOHL sie bewusst kein Steuer-/Situations-Partner sind (siehe
+        // getPvfInstance()) -- Dietmars Wunsch 04.08.2026: er will ALLE
+        // Verbindungen sehen/ueberwachen koennen, nicht nur die, die optimize()
+        // direkt fuer Entscheidungen braucht. Getrennt von $partners/
+        // GetPartners() gehalten, damit diese Erweiterung NICHT versehentlich
+        // zur Entscheidungslogik wird.
+        $softDependencies = array(
+            'PVF'          => $this->getPvfInstance(),
+            'LFC'          => $this->getLfcInstance(),
+            'StromGedacht' => $this->getStromGedachtInstance(),
+        );
+        foreach ($softDependencies as $module => $id) {
+            if ($id <= 0) {
+                continue;
+            }
+            $status  = IPS_InstanceExists($id) ? IPS_GetInstance($id)['InstanceStatus'] : 0;
+            $healthy = ($status === 102);
             $entries[] = array(
-                'module'     => 'PVF',
-                'instanceID' => $pvfID,
-                'label'      => IPS_InstanceExists($pvfID) ? IPS_GetName($pvfID) : '(geloescht)',
-                'status'     => $pvfStatus,
-                'healthy'    => $pvfHealthy,
+                'module'     => $module,
+                'instanceID' => $id,
+                'label'      => IPS_InstanceExists($id) ? IPS_GetName($id) : '(geloescht)',
+                'status'     => $status,
+                'healthy'    => $healthy,
             );
         }
 
