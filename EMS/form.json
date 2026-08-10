@@ -92,7 +92,7 @@
                     "items": [
                         {
                             "type": "Label",
-                            "caption": "Sind meine Zähler verbunden? Schau ganz oben im Panel \"🔗 Verbund-Status\" -- dort stehen die aktuellen Werte direkt im Formular (nicht nur im Objektbaum), inkl. Button \"Jetzt neu suchen\". Steht dort etwas bei MeterHub/GoodweET/InverterHub, brauchst du die Felder unten NICHT."
+                            "caption": "Sind meine Zähler verbunden? Schau ganz oben im Panel \"🔗 Verbund-Status\" -- dort stehen die aktuellen Werte direkt im Formular (nicht nur im Objektbaum), inkl. Button \"Jetzt neu suchen\". Steht dort etwas bei MeterHub/InverterHub, brauchst du die Felder unten NICHT."
                         },
                         {
                             "type": "PopupButton",
@@ -253,7 +253,7 @@
             "items": [
                 {
                     "type": "Label",
-                    "caption": "Nur nötig, falls kein Partnermodul (GoodweET/InverterHub) automatisch gefunden wurde -- normalerweise übernimmt das die automatische Erkennung, siehe \"Dokumentation & Hilfe\" oben."
+                    "caption": "Nur nötig, falls kein Partnermodul (InverterHub) automatisch gefunden wurde -- normalerweise übernimmt das die automatische Erkennung, siehe \"Dokumentation & Hilfe\" oben."
                 },
                 {
                     "type": "Label",
@@ -486,7 +486,7 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "Ab hier optionaler manueller Fallback -- nur ausfüllen, falls kein Partnermodul (InverterHub/GoodweET) automatisch gefunden wurde. Die Einstellungen oben (Kapazität, SOC-Grenzen) gelten unabhängig davon immer."
+                    "caption": "Ab hier optionaler manueller Fallback -- nur ausfüllen, falls kein Partnermodul (InverterHub) automatisch gefunden wurde. Die Einstellungen oben (Kapazität, SOC-Grenzen) gelten unabhängig davon immer."
                 },
                 {
                     "type": "Label",

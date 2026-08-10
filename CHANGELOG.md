@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.18.0 (2026-08-09)
+- **GoodweET komplett aus EMS entfernt.** War laut SUITE.md bereits seit
+  25.07.2026 als "Deprecated, abgeloest durch InverterHub" dokumentiert, EMS'
+  eigener Code hat GoodweET trotzdem weiterhin als BEVORZUGTEN WR-Treiber
+  behandelt (Dietmar musste am 09.08.2026 nachdruecklich darauf hinweisen).
+  Entfernt: `GUID_GOODWEET`, alle `GWET_*`-Intent-Konstanten,
+  `gwModeToGwetIntent()`, den `AttachController()`-Aufruf in `ApplyChanges()`,
+  die GoodweET-Sonderbehandlung in `Discover()`/`getInverterEntry()`/
+  `readState()`/`setGoodweMode()`, sowie alle "GoodweET"-Erwaehnungen in
+  form.json und im News-Panel. **InverterHub ist jetzt der einzige
+  WR-Treiberpfad** (alte manuelle Variablenverknuepfung bleibt als Fallback
+  fuer Anlagen ohne InverterHub bestehen). Kein Verhaltensunterschied fuer
+  Dietmars Anlage, da InverterHub dort ohnehin schon der tatsaechlich aktive
+  Pfad war -- reine Codebereinigung.
+
 ## 0.17.1 (2026-08-09)
 - **Vollstaendige Verbund-Ueberwachung** (Dietmar, 04.08.2026: "alle Verbindungen
   die wir generiert haben sehen und ueberwachen"): `GetFederationHealth()` zeigte
