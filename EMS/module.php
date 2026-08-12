@@ -89,6 +89,19 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('EMS_Fallback_Timeout', 60);
         $this->RegisterPropertyInteger('EMS_Log_Level',        EMS_LOG_BASIC);
 
+        // PV-Vollernte bei vollem Akku (Branch 3b, siehe optimize()): AC_EXPORT
+        // nutzt Xset (aktiver Zielwert, zapft die Batterie an) statt einer reinen
+        // Ceiling -- der Zielwert MUSS daher durch die reale PV-Spitzenleistung
+        // gedeckelt sein, nicht durch die WR-Leistungsgrenze. 0 = Branch bewusst
+        // inaktiv, bis der Nutzer seine tatsaechliche Anlagenleistung eintraegt
+        // (Grundregel "keine eigene Anlage als Norm" -- kein geratener Default).
+        $this->RegisterPropertyInteger('PV_Peak_Wp', 0);
+        // Mindestverweildauer in Branch 3b gegen Oszillation mit dem Automatik-
+        // Fallback (7), siehe optimize()-Kommentar. Sicherheitsausstieg bei
+        // sichtbarem SOC-Abfall ignoriert diese Dauer bewusst.
+        $this->RegisterPropertyInteger('EXPORT_Min_Dwell_Minutes', 10);
+        $this->RegisterAttributeInteger('Export3bEnteredTs', 0);
+
         // Aktive Ausfall-Benachrichtigung (Dietmar, 04.08.2026): passive Statuszeile
         // reicht nicht, notwendige Verbindungsabbrueche muessen aktiv gemeldet werden.
         // 0 = deaktiviert (Default -- kein Nutzer wird ungefragt mit Push zugespammt).
@@ -2137,29 +2150,66 @@ class EMS extends IPSModule
         // bestaetigt 30./31.07.2026 (InverterHub): der WR kappt dort die Erzeugung
         // auf Eigenverbrauchsniveau statt den Ueberschuss zu exportieren, auch bei
         // voller Sonne. Deckt sich mit einem von OpenEMS selbst offen markierten
-        // Randproblem (siehe SUITE.md "OpenEMS-Architekturanalyse": TODO in
-        // ApplyPowerHandler.handleRemoteMode "PV curtail" bei SOC=100%+Ueberschuss).
-        // Statt auf den autonomen Fallback zu vertrauen, hier explizit AC_EXPORT
-        // anfordern -- BEWUSST mit der vollen EMS_Max_Power_W als Ziel, NICHT mit dem
-        // aus $pvW berechneten Ueberschuss: $pvW ist die AKTUELL gemessene (noch
-        // gedrosselte!) PV-Leistung, ein daraus abgeleiteter kleiner Zielwert wuerde
-        // die Drosselung nur fortschreiben statt aufzuheben. Live bestaetigt: nur ein
-        // aggressiver, hoher Zielwert bringt den WR dazu, seine MPPT-Regelung
-        // hochzufahren und wirklich voll zu ernten (AC_EXPORT ist eine Ceiling, kein
-        // additiver Befehl -- der WR liefert ohnehin nur, was PV+Batterie hergeben).
+        // Randproblem (siehe SUITE.md "OpenEMS-Architekturanalyse").
+        //
+        // ZWEITER ANLAUF (12.08.2026) nach zwei live gefundenen Fehlern der ersten
+        // Fassung (0.15.0/0.15.1), siehe SUITE.md "GoodWe-Steuerregister":
+        // 1. AC_EXPORT (Modus 5) nutzt Xset, KEINE reine Ceiling -- der WR erreicht
+        //    den Zielwert notfalls durch Batterie-Entladung. `power=EMS_Max_Power_W`
+        //    (34500W) war also ein aktiver Befehl "entlade die Batterie bis zu
+        //    34500W", nicht nur "hebe die Kappung auf". Fix: Ziel jetzt `PV_Peak_Wp`
+        //    (reale PV-Spitzenleistung der Anlage, Nutzereingabe) statt der viel
+        //    zu hohen WR-Leistungsgrenze -- deckelt den denkbaren Batterie-Beitrag
+        //    auf die tatsaechliche PV-Fehlmenge, nicht auf die volle WR-Kapazitaet.
+        //    OHNE gesetzten Wert (0) bleibt dieser Branch bewusst INAKTIV statt zu
+        //    raten (Grundregel "keine eigene Anlage als Norm").
+        // 2. Die Bedingung selbst oszillierte mit Branch 7 (Automatik-Fallback),
+        //    weil $pvW die eigene, gerade erst gedrosselte Messung ist -- ein
+        //    einzelner knapper Zyklus unter der Schwelle kippte sofort zurueck in
+        //    den Fallback, der wieder kappte, was $pvW erneut senkte. Fix: echte
+        //    Hysterese ueber EXPORT_Min_Dwell_Minutes -- einmal aktiviert, bleibt
+        //    der Branch mindestens so lange aktiv, AUSSER der SOC faellt sichtbar
+        //    unter das Tagesziel (echter Beweis fuer Batterie-Entladung, dann
+        //    sofortiger Sicherheitsausstieg statt Dwell abzuwarten).
+        $pvPeakW  = (float)$this->ReadPropertyInteger('PV_Peak_Wp');
         $houseW   = (float)$s['house_pow_w'];
         $surplusW = $pvW - $houseW;
-        if ($s['bat_active'] && $soc >= ($socTargetDay - $hystSoc) && $surplusW > $fcMinPower) {
+        $dwellSec = max(0, $this->ReadPropertyInteger('EXPORT_Min_Dwell_Minutes')) * 60;
+        $enteredTs = $this->ReadAttributeInteger('Export3bEnteredTs');
+
+        $conditionMet = ($pvPeakW > 0) && $s['bat_active']
+            && $soc >= ($socTargetDay - $hystSoc) && $surplusW > $fcMinPower;
+        $socSafetyExit = $enteredTs !== 0 && $soc < ($socTargetDay - $hystSoc - 2.0);
+
+        if ($conditionMet || ($enteredTs !== 0 && !$socSafetyExit && (time() - $enteredTs) < $dwellSec)) {
+            if ($enteredTs === 0) {
+                $enteredTs = time();
+                $this->WriteAttributeInteger('Export3bEnteredTs', $enteredTs);
+            }
             $d['op_mode']    = EMS_OP_EXPORT;
             $d['gw_mode']    = GW_MODE_AC_EXPORT;
-            $d['gw_power_w'] = (int)$maxW;
+            $d['gw_power_w'] = (int)$pvPeakW;
             $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
             $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
-            $d['reason']     = sprintf(
-                'PV-Vollernte: Akku am Ziel (SOC=%.0f%%>=%.0f%%), volle Ernte anfordern (Ceiling=%.0fW) statt Eigenverbrauchs-Deckelung',
-                $soc, $socTargetDay, $maxW
-            );
+            $d['reason']     = $conditionMet
+                ? sprintf(
+                    'PV-Vollernte: Akku am Ziel (SOC=%.0f%%>=%.0f%%), Xset=%.0fW (PV-Spitzenleistung) statt Eigenverbrauchs-Deckelung',
+                    $soc, $socTargetDay, $pvPeakW
+                )
+                : sprintf(
+                    'PV-Vollernte (Hysterese, noch %ds): Bedingung kurz nicht erfuellt, bleibe aktiv gegen Oszillation',
+                    max(0, $dwellSec - (time() - $enteredTs))
+                );
             return $d;
+        }
+        if ($enteredTs !== 0) {
+            $this->WriteAttributeInteger('Export3bEnteredTs', 0);
+            if ($socSafetyExit) {
+                $this->emsLog(EMS_LOG_BASIC, sprintf(
+                    'PV-Vollernte: Sicherheitsausstieg, SOC=%.0f%% unter Ziel-Sicherheitsmarge gefallen',
+                    $soc
+                ));
+            }
         }
 
         // ── 4. Tibber teuer → Entladen ───────────────────────────────

@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.19.0 (2026-08-12)
+- **Branch 3b (PV-Vollernte bei vollem Akku) neu gebaut**, nach zwei live
+  gefundenen Fehlern der ersten Fassung (0.15.0/0.15.1) und InverterHubs
+  vollstaendiger Verifikation der offiziellen GoodWe-Registerdokumentation
+  (siehe SUITE.md "GoodWe-Steuerregister"):
+  1. `AC_EXPORT` (Modus 5) nutzt **Xset**, keine reine Ceiling — der WR erreicht
+     den Zielwert notfalls durch Batterie-Entladung. `power=EMS_Max_Power_W`
+     war faktisch der Befehl "entlade bis zu 34500W", nicht nur "hebe die
+     Kappung auf". Fix: neue Property `PV_Peak_Wp` (reale PV-Spitzenleistung,
+     Nutzereingabe, Default 0=inaktiv — keine geratene Anlagengroesse) deckelt
+     den Zielwert jetzt auf die tatsaechliche Anlagenleistung, sodass die
+     Batterie hoechstens die reale PV-Fehlmenge beisteuern kann.
+  2. Die Bedingung oszillierte mit dem Automatik-Fallback (7), weil `$pvW` die
+     eigene, gerade gedrosselte Messung war — kurze Unterschreitungen kippten
+     sofort zurueck. Fix: echte Hysterese ueber neue Property
+     `EXPORT_Min_Dwell_Minutes` (Default 10) + neues Attribut
+     `Export3bEnteredTs`; Sicherheitsausstieg bei sichtbarem SOC-Abfall
+     ignoriert die Wartezeit bewusst (echter Entladebeweis geht vor Dwell).
+  Branch bleibt inaktiv (Verhalten wie vorher: faellt in Fallback 7), bis
+  `PV_Peak_Wp` explizit gesetzt wird — kein automatischer Verhaltenswechsel
+  fuer bestehende Installationen.
+
 ## 0.18.0 (2026-08-09)
 - **GoodweET komplett aus EMS entfernt.** War laut SUITE.md bereits seit
   25.07.2026 als "Deprecated, abgeloest durch InverterHub" dokumentiert, EMS'
