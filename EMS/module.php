@@ -91,11 +91,10 @@ class EMS extends IPSModule
 
         // PV-Vollernte bei vollem Akku (Branch 3b, siehe optimize()): AC_EXPORT
         // nutzt Xset (aktiver Zielwert, zapft die Batterie an) statt einer reinen
-        // Ceiling -- der Zielwert MUSS daher durch die reale PV-Spitzenleistung
-        // gedeckelt sein, nicht durch die WR-Leistungsgrenze. 0 = Branch bewusst
-        // inaktiv, bis der Nutzer seine tatsaechliche Anlagenleistung eintraegt
-        // (Grundregel "keine eigene Anlage als Norm" -- kein geratener Default).
-        $this->RegisterPropertyInteger('PV_Peak_Wp', 0);
+        // Ceiling -- der Zielwert wird daher aus der PV-Prognose (PVF, aktueller
+        // Slot) abgeleitet, nicht aus einer festen Nutzereingabe (die das Wetter
+        // ignorieren wuerde). Ohne installierte PVF-Instanz bleibt der Branch
+        // bewusst inaktiv (Grundregel "keine eigene Anlage als Norm").
         // Mindestverweildauer in Branch 3b gegen Oszillation mit dem Automatik-
         // Fallback (7), siehe optimize()-Kommentar. Sicherheitsausstieg bei
         // sichtbarem SOC-Abfall ignoriert diese Dauer bewusst.
@@ -2152,32 +2151,37 @@ class EMS extends IPSModule
         // voller Sonne. Deckt sich mit einem von OpenEMS selbst offen markierten
         // Randproblem (siehe SUITE.md "OpenEMS-Architekturanalyse").
         //
-        // ZWEITER ANLAUF (12.08.2026) nach zwei live gefundenen Fehlern der ersten
-        // Fassung (0.15.0/0.15.1), siehe SUITE.md "GoodWe-Steuerregister":
+        // DRITTER ANLAUF (13.08.2026) nach zwei live gefundenen Fehlern, siehe
+        // SUITE.md "GoodWe-Steuerregister":
         // 1. AC_EXPORT (Modus 5) nutzt Xset, KEINE reine Ceiling -- der WR erreicht
         //    den Zielwert notfalls durch Batterie-Entladung. `power=EMS_Max_Power_W`
         //    (34500W) war also ein aktiver Befehl "entlade die Batterie bis zu
-        //    34500W", nicht nur "hebe die Kappung auf". Fix: Ziel jetzt `PV_Peak_Wp`
-        //    (reale PV-Spitzenleistung der Anlage, Nutzereingabe) statt der viel
-        //    zu hohen WR-Leistungsgrenze -- deckelt den denkbaren Batterie-Beitrag
-        //    auf die tatsaechliche PV-Fehlmenge, nicht auf die volle WR-Kapazitaet.
-        //    OHNE gesetzten Wert (0) bleibt dieser Branch bewusst INAKTIV statt zu
-        //    raten (Grundregel "keine eigene Anlage als Norm").
+        //    34500W", nicht nur "hebe die Kappung auf".
         // 2. Die Bedingung selbst oszillierte mit Branch 7 (Automatik-Fallback),
-        //    weil $pvW die eigene, gerade erst gedrosselte Messung ist -- ein
-        //    einzelner knapper Zyklus unter der Schwelle kippte sofort zurueck in
-        //    den Fallback, der wieder kappte, was $pvW erneut senkte. Fix: echte
+        //    weil $pvW die eigene, gerade erst gedrosselte Messung ist. Fix: echte
         //    Hysterese ueber EXPORT_Min_Dwell_Minutes -- einmal aktiviert, bleibt
         //    der Branch mindestens so lange aktiv, AUSSER der SOC faellt sichtbar
         //    unter das Tagesziel (echter Beweis fuer Batterie-Entladung, dann
         //    sofortiger Sicherheitsausstieg statt Dwell abzuwarten).
-        $pvPeakW  = (float)$this->ReadPropertyInteger('PV_Peak_Wp');
-        $houseW   = (float)$s['house_pow_w'];
-        $surplusW = $pvW - $houseW;
-        $dwellSec = max(0, $this->ReadPropertyInteger('EXPORT_Min_Dwell_Minutes')) * 60;
+        // Ziel-Deckel jetzt DYNAMISCH aus der PV-Prognose (PVF) statt einer festen,
+        // manuell eingetragenen Wp-Zahl (Dietmars Einwand 13.08.2026: eine feste
+        // Nennleistung ignoriert das Wetter -- an einem bewoelkten Tag waere eine
+        // hohe Nennleistung trotzdem ein Befehl an den WR, den fehlenden Rest aus
+        // der Batterie zu holen). getPvfSlotsWatt() liefert die p50-Prognose je
+        // 15-Min-Slot (bereits fuer parseForecastNextHours() genutzt) -- der
+        // aktuelle Slot ist eine wetterabhaengige, bereits vorhandene Schaetzung
+        // der real erreichbaren PV-Leistung, kein neues Bauteil noetig. Ohne
+        // installierte PVF-Instanz bleibt der Branch bewusst INAKTIV statt zu
+        // raten (Grundregel "keine eigene Anlage als Norm").
+        $pvfSlots  = $this->getPvfSlotsWatt();
+        $nowSlot   = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
+        $pvTargetW = isset($pvfSlots[$nowSlot]) ? (float)$pvfSlots[$nowSlot] : 0.0;
+        $houseW    = (float)$s['house_pow_w'];
+        $surplusW  = $pvW - $houseW;
+        $dwellSec  = max(0, $this->ReadPropertyInteger('EXPORT_Min_Dwell_Minutes')) * 60;
         $enteredTs = $this->ReadAttributeInteger('Export3bEnteredTs');
 
-        $conditionMet = ($pvPeakW > 0) && $s['bat_active']
+        $conditionMet = ($pvTargetW > 0) && $s['bat_active']
             && $soc >= ($socTargetDay - $hystSoc) && $surplusW > $fcMinPower;
         $socSafetyExit = $enteredTs !== 0 && $soc < ($socTargetDay - $hystSoc - 2.0);
 
@@ -2188,13 +2192,13 @@ class EMS extends IPSModule
             }
             $d['op_mode']    = EMS_OP_EXPORT;
             $d['gw_mode']    = GW_MODE_AC_EXPORT;
-            $d['gw_power_w'] = (int)$pvPeakW;
+            $d['gw_power_w'] = (int)$pvTargetW;
             $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
             $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
             $d['reason']     = $conditionMet
                 ? sprintf(
-                    'PV-Vollernte: Akku am Ziel (SOC=%.0f%%>=%.0f%%), Xset=%.0fW (PV-Spitzenleistung) statt Eigenverbrauchs-Deckelung',
-                    $soc, $socTargetDay, $pvPeakW
+                    'PV-Vollernte: Akku am Ziel (SOC=%.0f%%>=%.0f%%), Xset=%.0fW (PVF-Prognose aktueller Slot) statt Eigenverbrauchs-Deckelung',
+                    $soc, $socTargetDay, $pvTargetW
                 )
                 : sprintf(
                     'PV-Vollernte (Hysterese, noch %ds): Bedingung kurz nicht erfuellt, bleibe aktiv gegen Oszillation',

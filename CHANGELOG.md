@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.20.0 (2026-08-15)
+- **Branch 3b (PV-Vollernte): Zielwert kommt jetzt aus der PV-Prognose (PVF)
+  statt einer festen, manuell eingetragenen Wp-Zahl.** Dietmars berechtigter
+  Einwand (13.08.2026): eine feste Nennleistung als Xset-Ziel ist wetterblind
+  — an einem bewölkten Tag würde der WR die "fehlende" Sonne trotzdem aus der
+  Batterie holen, obwohl die Nennleistung an dem Tag ohnehin unrealistisch ist.
+  Neuer Zielwert: aktueller 15-Min-Slot der bereits vorhandenen PVF-p50-
+  Prognose (`getPvfSlotsWatt()`, existierte schon für andere Zwecke im Code) —
+  wetterabhängig, keine manuelle Eingabe mehr nötig. `PV_Peak_Wp`-Property und
+  ihr Formularfeld wieder entfernt (kein Parallelbetrieb zweier Mechanismen).
+  Ohne installierte PVF-Instanz bleibt der Branch weiterhin bewusst inaktiv.
+  Rest der Logik (Hysterese, SOC-Sicherheitsausstieg) unverändert aus 0.19.0.
+  Diese Umstellung wurde diesmal VORHER als schriftlicher Plan mit Dietmar
+  abgestimmt, nicht reaktiv nach einem Live-Vorfall nachgezogen.
+
 ## 0.19.0 (2026-08-12)
 - **Branch 3b (PV-Vollernte bei vollem Akku) neu gebaut**, nach zwei live
   gefundenen Fehlern der ersten Fassung (0.15.0/0.15.1) und InverterHubs

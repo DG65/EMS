@@ -35,35 +35,27 @@
                     "items": [
                         {
                             "type": "NumberSpinner",
-                            "name": "PV_Peak_Wp",
-                            "caption": "Reale PV-Spitzenleistung der Anlage (Wp)",
+                            "name": "EXPORT_Min_Dwell_Minutes",
+                            "caption": "Mindestverweildauer PV-Vollernte (Minuten) — gegen Pendeln mit der Automatik",
                             "minimum": 0,
-                            "maximum": 100000,
-                            "suffix": " Wp"
+                            "maximum": 60,
+                            "suffix": " min"
                         },
                         {
                             "type": "PopupButton",
                             "caption": "?",
                             "width": "70px",
                             "popup": {
-                                "caption": "Wofür wird das gebraucht?",
+                                "caption": "Wie funktioniert das?",
                                 "items": [
                                     {
                                         "type": "Label",
-                                        "caption": "Ist der Akku voll und trotzdem PV-Überschuss vorhanden, fordert EMS aktiv Export an. Der GoodWe-Exportmodus zielt dabei aktiv auf den vorgegebenen Wert und zapft notfalls die Batterie an, um ihn zu erreichen — deshalb hier bewusst NICHT die WR-Leistungsgrenze eintragen, sondern die tatsächliche Spitzenleistung deiner PV-Module (z. B. 9180 für eine 9,18-kWp-Anlage). So kann die Batterie höchstens die tatsächliche PV-Fehlmenge beisteuern, nicht beliebig viel. Ohne Eintrag (0) bleibt diese Funktion deaktiviert."
+                                        "caption": "Ist der Akku voll und trotzdem PV-Überschuss vorhanden, fordert EMS aktiv Export an. Als Zielwert nutzt EMS automatisch die aktuelle PV-Prognose (Modul \"Prognose\"/PVF, falls installiert) für den laufenden Viertelstunden-Slot — wetterabhängig, keine manuelle Eingabe nötig. Der GoodWe-Exportmodus zielt aktiv auf diesen Wert und zapft notfalls die Batterie an, um ihn zu erreichen; ein Sicherheitsausstieg bricht sofort ab, falls der Akku-Ladestand dabei sichtbar unter das Tagesziel fällt. Ohne installiertes Prognose-Modul bleibt diese Funktion deaktiviert."
                                     }
                                 ]
                             }
                         }
                     ]
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "EXPORT_Min_Dwell_Minutes",
-                    "caption": "Mindestverweildauer PV-Vollernte (Minuten) — gegen Pendeln mit der Automatik",
-                    "minimum": 0,
-                    "maximum": 60,
-                    "suffix": " min"
                 },
                 {
                     "type": "Label",
