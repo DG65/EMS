@@ -32,7 +32,7 @@ Das Modul ist modular aufgebaut: Jeder Geräteblock (Wechselrichter, Batterie, W
 | Goodwe Batteriespeicher (BMS) | Nein | Indirekt über WR |
 | Goodwe SmartMeter (NAP) | Empfohlen | Nein — Messung |
 | Siemens PAC2200 | Nein | Nein — Redundanzmessung |
-| go-e Charger V3 (1–n) | Nein | Ja — API |
+| go-e Charger V3 (1–n, via NRG-Stack ChargerHub) | Nein | Ja — ChargerHub |
 | Heishamon / Panasonic Aquarea | Nein | Nein — Monitoring |
 | Tibber (TibberV2-Modul) | Empfohlen | Nein — Preisdaten |
 | PV Forecast (pvForecast-Modul) | Nein | Nein — Prognosedaten |
@@ -43,7 +43,7 @@ Das Modul ist modular aufgebaut: Jeder Geräteblock (Wechselrichter, Batterie, W
 
 - IP-Symcon ab Version 9.0
 - Goodwe Wechselrichter bereits via Modbus-TCP in IPS eingebunden
-- Für Wallboxsteuerung: go-e Charger Modul (IPSCoyote/GO-eCharger) installiert
+- Für Wallboxsteuerung: [NRG-Stack ChargerHub](https://github.com/DG65/NRGChargerHub) installiert (Migration vom Community-Modul IPSCoyote/GO-eCharger über den [MigrationsHub](https://github.com/DG65/NRGMigrationsHub))
 - Für Preisoptimierung: TibberV2-Modul (da8ter) installiert
 - Für Erzeugungsprognose: pvForecast-Modul installiert
 
@@ -53,7 +53,7 @@ Das Modul ist modular aufgebaut: Jeder Geräteblock (Wechselrichter, Batterie, W
 
 1. Im IP-Symcon Module Control folgende URL hinzufügen:
    ```
-   https://github.com/[repository]/EMS
+   https://github.com/DG65/NRGEMS
    ```
 2. Neue Instanz anlegen: `Strg+1` → Hersteller "Community" → "EMS"
 3. Konfiguration öffnen und Geräteblöcke aktivieren und verknüpfen
@@ -95,7 +95,7 @@ Die Konfiguration ist in folgende Sektionen gegliedert:
 
 ### 5. Wallboxen (optional)
 - Aktivierung und Anzahl Wallboxen (1–n)
-- Je Wallbox: IPS-Instanz-ID des go-e Charger Moduls
+- Je Wallbox: IPS-Instanz-ID der ChargerHub-Wallbox
 - Priorisierung bei mehreren Wallboxen
 - Mindest-SOC Fahrzeug für Ladefreigabe (falls bekannt)
 - Manuelles Laden / Grid Rewards Schalter
@@ -223,11 +223,16 @@ Das Modul legt folgende Statusvariablen automatisch an:
 
 ## Lizenz
 
-Dieses Modul steht unter der MIT-Lizenz zur freien Nutzung und Weiterentwicklung.
+Lizenz: PolyForm Noncommercial 1.0.0 — private/nicht-kommerzielle Nutzung
+ist frei, gewerbliche Nutzung erfordert eine gesonderte Lizenz vom
+Rechteinhaber (DG65). Der Wechsel wirkt nur nach vorn: bereits unter MIT
+veröffentlichte Altversionen bleiben MIT. Der vollständige Lizenztext liegt
+im Repo ([LICENSE](LICENSE)). Spenden sind willkommen:
+[paypal.me/DietmarGureth](https://paypal.me/DietmarGureth).
 
 ## Danksagung
 
 Dieses Modul basiert auf der Arbeit der IP-Symcon Community und nutzt folgende externe Module:
-- [GO-eCharger Modul](https://github.com/IPSCoyote/GO-eCharger) von IPSCoyote
+- [ChargerHub](https://github.com/DG65/NRGChargerHub) (NRG-Stack) — frühere Versionen nutzten das [GO-eCharger Modul](https://github.com/IPSCoyote/GO-eCharger) von IPSCoyote
 - [TibberV2 Modul](https://github.com/da8ter/TibberV2) von da8ter
 - [HeishaMon](https://github.com/heishamon/HeishaMon) Protokoll
