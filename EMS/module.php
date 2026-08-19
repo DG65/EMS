@@ -345,7 +345,7 @@ class EMS extends IPSModule
                 ),
                 array(
                     'type'    => 'Label',
-                    'caption' => 'Koordiniert alle NRG-Stack-Module (InverterHub, MeterHub, ChargerHub, HeishaMon, Tessie, TibberGridRewards, StromGedacht, SteuerboxHub) über deren *_GetFunctions-Verträge. Details: https://github.com/DG65/EMS'
+                    'caption' => 'Koordiniert alle NRG-Stack-Module (InverterHub, MeterHub, ChargerHub, HeishaMon, Tessie, TibberGridRewards, StromGedacht, SteuerboxHub) über deren *_GetFunctions-Verträge. Details: https://github.com/DG65/NRGEMS'
                 ),
             )
         ));
