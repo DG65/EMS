@@ -39,7 +39,7 @@ define('EMS_LOG_VERBOSE',     2);
 
 // Formular-Konvention (siehe EMS/SUITE.md "Einheitliche Formular-Optik"):
 // Was-ist-Neu-Panel ist versionsscharf dismissible, Referenzmuster InverterHub.
-define('EMS_NEWS_VERSION', '0.5.0');
+define('EMS_NEWS_VERSION', '0.6.0');
 
 // NRG-Stack Partnermodul-GUIDs (fuer automatische Discovery, siehe discoverPartners())
 define('GUID_CHARGERHUB',    '{9256C34E-5CFD-4F37-8BFE-E65390EBB37C}');
@@ -56,7 +56,7 @@ define('GUID_STROMGEDACHT', '{D5A8C3A1-2222-4A55-8888-123456789003}');
 
 // PV-Erzeugungsprognose (PVF_GetForecast-Vertrag: 96 15-Min-Slots p10/p50/p90
 // in Watt, offset 0=heute/1=morgen) -- ersetzt die alte VAR_FC_JSON-Property,
-// siehe parseForecastNextHours()/parseForecastForSlots().
+// siehe parseForecastNextHours()/BuildDayPlan().
 define('GUID_PVFORECAST', '{257DD4E8-9705-462E-89FC-56D0A1038353}');
 
 // LoadForecast (LFC_GetEnergyWindow-Vertrag: erwarteter Verbrauch in kWh
@@ -138,12 +138,6 @@ class EMS extends IPSModule
         $this->RegisterPropertyInteger('VAR_WR_EMS_Power',     0);
         $this->RegisterPropertyInteger('VAR_WR_Export_Enable', 0);
         $this->RegisterPropertyInteger('VAR_WR_Export_Limit',  0);
-        for ($i = 1; $i <= 4; $i++) {
-            $this->RegisterPropertyInteger('VAR_WR_Time' . $i . '_Start', 0);
-            $this->RegisterPropertyInteger('VAR_WR_Time' . $i . '_End',   0);
-            $this->RegisterPropertyInteger('VAR_WR_Time' . $i . '_Power', 0);
-            $this->RegisterPropertyInteger('VAR_WR_Time' . $i . '_Week',  0);
-        }
         $this->RegisterPropertyInteger('VAR_PV_Total_Power',   0);
         $this->RegisterPropertyInteger('VAR_PV_Day_Energy',    0);
         $this->RegisterPropertyBoolean('PV_MPPT_Active',       false);
@@ -224,8 +218,11 @@ class EMS extends IPSModule
         $this->RegisterPropertyFloat(  'TIB_Threshold_WB',         0.20);
         $this->RegisterPropertyFloat(  'TIB_Threshold_Export',     0.20);
 
-        // ── Solarspitzengesetz (negative Preise) ───────────────────
-        $this->RegisterPropertyBoolean('NEG_PRICE_Active',       false);
+        // ── Tagesplan: Lastprognose-Fallback ────────────────────────
+        // Frueher nur fuer die separate Solarspitzengesetz-Funktion genutzt
+        // (entfernt 19.08.2026, siehe BuildDayPlan()) -- jetzt der generelle
+        // Fallback-Mittelwert fuer die Hausverbrauchs-Schaetzung je Slot,
+        // solange LFC keine belastbare Tagesprognose liefert.
         $this->RegisterPropertyInteger('NEG_Avg_House_Load_W',   500);
 
         // ── §14a EnWG ───────────────────────────────────────────────
@@ -280,6 +277,11 @@ class EMS extends IPSModule
         $this->RegisterAttributeInteger('ConsecutiveErrors', 0);
         $this->RegisterAttributeInteger('BatteryBoostUntil', 0);
 
+        // ── Tagesplan (siehe BuildDayPlan()/ensureDayPlanEvent()) ────
+        $this->RegisterAttributeString('DayPlan',          '[]');
+        $this->RegisterAttributeString('DayPlanSignature', '');
+        $this->RegisterAttributeInteger('DayPlanEventId',  0);
+
         // ── Sondereffekt-Ereignisliste (externe Regeleingriffe, siehe
         // EMS_GetSpecialEvents()/trackSpecialEvents() -- lernende Module
         // wie LFC/PVF schliessen diese Fenster vom Training aus) ───────
@@ -305,6 +307,14 @@ class EMS extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        // Idempotent: legt den sichtbaren Tagesplan-Wochenplan nur an, wenn
+        // er noch fehlt (Muster: NRG.*-Variablenprofile).
+        try {
+            $this->ensureDayPlanEvent();
+        } catch (Exception $e) {
+            $this->emsLog(EMS_LOG_BASIC, 'Tagesplan-Event konnte nicht angelegt werden: ' . $e->getMessage());
+        }
 
         $active   = $this->ReadPropertyBoolean('EMS_Active');
         $interval = $this->ReadPropertyInteger('EMS_Interval');
@@ -389,15 +399,23 @@ class EMS extends IPSModule
                 'items'    => array(
                     array(
                         'type'    => 'Label',
+                        'caption' => '• NEU: Sichtbarer Tagesplan (Wochenplan-Event "EMS Tagesplan (automatisch)" unter dieser Instanz) — zeigt je Viertelstunde, was das EMS vorhat und warum, statt nur reaktiv auf den Momentanpreis zu reagieren. Nutzt PT15M-Preise + PV-Prognose (PVF) + Lastschätzung.'
+                    ),
+                    array(
+                        'type'    => 'Label',
+                        'caption' => '• NEU: Export-Entscheidung berücksichtigt jetzt auch, wenn der aktuelle Bezugspreis unter der Einspeisevergütung liegt (typisch mittags) — dann exportiert die Batterie lieber, statt für Eigenverbrauch entladen zu werden, und der Hausverbrauch wird günstig aus dem Netz gedeckt.'
+                    ),
+                    array(
+                        'type'    => 'Label',
+                        'caption' => '• Entfernt: die alten Buttons "Nacht-Ladefenster planen"/"Negativpreis-Vorentladung planen" (schrieben in die Goodwe-eigenen ECO-Zeitfenster-Register, liefen nie automatisch und konnten dem laufenden EMS widersprechen). Beide Aufgaben übernimmt jetzt der Tagesplan, ausgeführt über denselben Weg wie der Rest von EMS (InverterHub ctl_ems_*).'
+                    ),
+                    array(
+                        'type'    => 'Label',
                         'caption' => '• Automatische NRG-Stack-Partnermodul-Erkennung (EMS_Discover) — kein manuelles Verknüpfen von Variablen-IDs mehr nötig.'
                     ),
                     array(
                         'type'    => 'Label',
                         'caption' => '• Steuerhoheit je Gerät (Situation A/B): EMS erkennt automatisch, wo es schreiben darf und wo ein externer Akteur (Tibber, go-e Controller) bereits regelt.'
-                    ),
-                    array(
-                        'type'    => 'Label',
-                        'caption' => '• Neu: Solarspitzengesetz-Speicher-Vorentladung vor Negativpreis-Fenstern (eigenes Panel weiter unten).'
                     ),
                     array(
                         'type'    => 'Label',
@@ -497,6 +515,16 @@ class EMS extends IPSModule
             $this->checkFederationHealthAlarm();
         } catch (Exception $e) {
             $this->emsLog(EMS_LOG_BASIC, 'Health-Check-Fehler (Meldung übersprungen): ' . $e->getMessage());
+        }
+
+        // Tagesplan bei neuen Preisen/Prognosen automatisch aktualisieren --
+        // laeuft bewusst UNABHAENGIG von EMS_Active, damit der Plan auch bei
+        // deaktiviertem EMS sichtbar bleibt (Dietmar kann ihn pruefen, bevor
+        // er EMS ueberhaupt aktiviert -- siehe SUITE.md-Historie 19.08.2026).
+        try {
+            $this->BuildDayPlan(false);
+        } catch (Exception $e) {
+            $this->emsLog(EMS_LOG_BASIC, 'Tagesplan-Fehler (Ausfuehrung laeuft unbeeinflusst weiter): ' . $e->getMessage());
         }
 
         if (!$this->ReadPropertyBoolean('EMS_Active')) {
@@ -1379,306 +1407,328 @@ class EMS extends IPSModule
     }
 
     /**
-     * Goodwe ECO-Zeitfenster setzen
-     * Zeitformat: High Byte = Stunden (0-23), Low Byte = Minuten (0-59)
-     * Beispiel: 02:30 -> (2 << 8) | 30 = 542
-     * Work Week: High Byte 0xFF = enable, Low Byte Bits 0-6 = So-Sa
-     * Ganze Woche aktiv: 0xFF7F = 65407
+     * TAGESPLAN (19.08.2026, ersetzt SetECOWindow()/PlanNightCharge()/
+     * PlanNegativePriceExport()): jene drei Funktionen liefen nur auf
+     * manuellen Formular-Klick, nie automatisch, UND schrieben in die
+     * Goodwe-eigenen ECO-Zeitfenster-Register -- ein zweiter, von
+     * optimize()/applyDecision() komplett unabhaengiger Steuerpfad, der
+     * dessen kontinuierliche ctl_ems_mode/-power-Reassert-Schleife
+     * ueberschrieben oder ignoriert hat (siehe SUITE.md-Historie
+     * 19.08.2026). Der Tagesplan ersetzt beide alten Wege: EIN
+     * Entscheidungsmodell, das den ganzen Tag vorausplant UND sichtbar
+     * macht (Wochenplan-Event, siehe ensureDayPlanEvent()), exekutiert
+     * wird er weiterhin ausschliesslich ueber applyDecision()/
+     * setGoodweMode() -- also ueber InverterHubs ctl_ems_*, nie mehr
+     * ueber die WR-eigenen ECO-Fenster.
+     *
+     * Vorbild: Dietmars Winterskript (IPS-Objekt #55729, "Speicher-
+     * beladungszyklen festlegen") -- Rang-basierte Auswahl der
+     * guenstigsten Viertelstunden statt nur des guenstigsten
+     * zusammenhaengenden Blocks, materialisiert in einem echten
+     * Symcon-Wochenplan statt nur im Log.
      */
-    public function SetECOWindow($slot, $startHour, $startMin, $endHour, $endMin, $powerPct, $weekMask = 65407)
-    {
-        if ($slot < 1 || $slot > 4) {
-            $this->emsLog(EMS_LOG_BASIC, 'SetECOWindow: Slot muss 1-4 sein');
-            return;
-        }
-        $startVal = ($startHour << 8) | $startMin;
-        $endVal   = ($endHour   << 8) | $endMin;
-        $varStart = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Start');
-        $varEnd   = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_End');
-        $varPower = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Power');
-        $varWeek  = $this->ReadPropertyInteger('VAR_WR_Time' . $slot . '_Week');
-        if ($varStart > 0) { $this->writeVar($varStart, $startVal); }
-        if ($varEnd   > 0) { $this->writeVar($varEnd,   $endVal);   }
-        if ($varPower > 0) { $this->writeVar($varPower,  $powerPct); }
-        if ($varWeek  > 0) { $this->writeVar($varWeek,   $weekMask); }
-        $this->emsLog(EMS_LOG_BASIC, sprintf(
-            'ECO Slot %d: %02d:%02d-%02d:%02d %d%% Woche=0x%04X',
-            $slot, $startHour, $startMin, $endHour, $endMin, $powerPct, $weekMask
-        ));
-    }
 
     /**
-     * Nacht-Ladefenster planen.
-     * Ohne Tibber: volles §14a-Fenster.
-     * Mit Tibber PT15M: guenstigstes konsekutives Fenster berechnen,
-     * das gerade lang genug ist um den fehlenden SOC zu laden.
+     * Berechnet den Tagesplan (96 Viertelstunden-Slots, heute) neu, falls
+     * sich die zugrundeliegenden Preise oder der Kalendertag seit dem
+     * letzten Lauf geaendert haben (Signatur-Vergleich) -- kein Aufwand bei
+     * jedem 30-Sekunden-Update()-Tick, nur wenn wirklich neue Tibber-Daten
+     * da sind. $force=true (Formular-Button) erzwingt eine Neuberechnung.
      */
-    public function PlanNightCharge()
+    public function BuildDayPlan($force = false)
     {
-        $startH = $this->ReadPropertyInteger('ENWG14A_Start_Hour');
-        $endH   = $this->ReadPropertyInteger('ENWG14A_End_Hour');
+        $todayJson = (string)$this->readVar('VAR_TIB_PT15M_Today', '');
+        $signature = date('Y-m-d') . '|' . md5($todayJson);
 
-        if (!$this->ReadPropertyBoolean('TIBBER_Active')
-            || !$this->ReadPropertyBoolean('BAT_Active')) {
-            $this->SetECOWindow(1, $startH, 0, $endH, 0, 100, 65407);
-            $this->emsLog(EMS_LOG_BASIC, sprintf(
-                'Nacht-Ladefenster: %02d:00-%02d:00 Uhr (Slot 1, kein Tibber/Bat)', $startH, $endH
-            ));
+        if (!$force && $this->ReadAttributeString('DayPlanSignature') === $signature) {
             return;
         }
 
-        // Fehlenden SOC ermitteln
+        if (empty($todayJson)
+            || !$this->ReadPropertyBoolean('TIBBER_Active')
+            || !$this->ReadPropertyBoolean('BAT_Active')) {
+            $this->WriteAttributeString('DayPlan', '[]');
+            $this->WriteAttributeString('DayPlanSignature', $signature);
+            $this->emsLog(EMS_LOG_BASIC, 'BuildDayPlan: keine PT15M-Preisdaten oder Tibber/Batterie inaktiv -- kein Tagesplan moeglich');
+            return;
+        }
+
+        $prices   = $this->parsePT15M($todayJson);
+        $pvfSlots = $this->getPvfSlotsWatt(); // Index 0-191 (heute+morgen), hier nur 0-95 genutzt
+
+        // Lastprognose je Slot: LFC liefert bisher nur eine Fenster-Summe
+        // (kWh fuer einen beliebigen Zeitraum), keine 15-Min-Kurve -- als
+        // Naeherung wird das heutige Tagesfenster gleichmaessig auf 24h
+        // verteilt, wenn LFC eine belastbare Zahl liefert (coverage=1.0),
+        // sonst bleibt der feste Erfahrungswert NEG_Avg_House_Load_W die
+        // Grundlage (bisher "Solarspitzengesetz"-Property, jetzt allgemeiner
+        // Lastprognose-Fallback fuer den ganzen Tagesplan). Eine echte
+        // 15-Min-Lastkurve ist ein offener Ausbauschritt fuer LFC selbst.
+        $avgHouseW = (float)$this->ReadPropertyInteger('NEG_Avg_House_Load_W');
+        $lfcId = $this->getLfcInstance();
+        if ($lfcId > 0) {
+            $window = @LFC_GetEnergyWindow($lfcId, strtotime('today'), strtotime('tomorrow'));
+            if (is_array($window) && isset($window['kwh']) && ($window['coverage'] ?? 0) >= 1.0) {
+                $avgHouseW = ($window['kwh'] * 1000.0) / 24.0;
+            }
+        }
+
+        $capKwh         = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
+        $maxW           = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
+        $socMin         = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
+        $socReserve     = (float)$this->ReadPropertyInteger('BAT_SOC_Reserve_Backup');
+        $hystSoc        = (float)$this->ReadPropertyInteger('OPT_Hysteresis_SOC');
+        $socTargetDay   = $this->getDynamicSocTargetDay();
+        $socTargetNight = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
+        $thCharge       = (float)$this->ReadPropertyFloat('TIB_Threshold_Charge');
+        $thDischarge    = (float)$this->ReadPropertyFloat('TIB_Threshold_Discharge');
+        $thExport       = (float)$this->ReadPropertyFloat('TIB_Threshold_Export');
+        $fcMinPower     = (float)$this->ReadPropertyInteger('FORECAST_Min_Power_W');
+        $feedTariff     = (float)$this->readVar('VAR_TIB_Feed_Tariff', 0.1836);
+        $enwgActive     = $this->ReadPropertyBoolean('ENWG14A_Active');
+        $enwgStartH     = $this->ReadPropertyInteger('ENWG14A_Start_Hour');
+        $enwgEndH       = $this->ReadPropertyInteger('ENWG14A_End_Hour');
+
+        // Rangfolge der Slots nach Preis (Muster: Dietmars Winterskript
+        // #58045, 19.08.2026) -- die N insgesamt guenstigsten Viertelstunden
+        // werden gesucht, nicht nur der guenstigste ZUSAMMENHAENGENDE Block
+        // (alte findCheapestBlock()-Logik) -- bei unruhiger Preiskurve
+        // koennen verstreute billige Slots guenstiger sein als ein Block.
+        $ranked = $prices;
+        asort($ranked);
+        $cheapRank = array();
+        $r = 0;
+        foreach ($ranked as $slotIdx => $p) { $cheapRank[$slotIdx] = $r++; }
+
         $soc = (float)$this->readVar('VAR_BAT1_SOC', 0);
         if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
             $soc = ($soc + (float)$this->readVar('VAR_BAT2_SOC', 0)) / 2.0;
         }
-        $target    = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
-        $capKwh    = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
-        $maxW      = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
+        $nowSlot  = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
+        $chargeKw = min($maxW / 1000.0, $capKwh * 0.5); // wie bisher: Ladegeschwindigkeit aus Leistungsgrenze/0.5C geschaetzt
 
-        // Ladedauer abschaetzen: Ladegeschwindigkeit = min(Max-Leistung, 0.5C)
-        $chargeKw    = min($maxW / 1000.0, $capKwh * 0.5);
-        $neededKwh   = max(0.0, ($target - $soc) / 100.0 * $capKwh);
-        $neededHrs   = ($chargeKw > 0 && $neededKwh > 0) ? ($neededKwh / $chargeKw) : 0.0;
-        $neededSlots = max(1, (int)ceil($neededHrs * 4)); // 15-Min-Slots
+        $plan = array();
+        for ($slot = 0; $slot < 96; $slot++) {
+            if ($slot < $nowSlot) {
+                $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0, 'reason' => '(vergangen)');
+                continue;
+            }
 
-        // Guenstigstes Fenster im §14a-Zeitraum suchen
-        $window = $this->getPT15MWindow($startH, $endH);
+            $price      = $prices[$slot];
+            $pvW        = (float)($pvfSlots[$slot] ?? 0.0);
+            $hourOfSlot = (int)($slot / 4);
 
-        if (empty($window)) {
-            // Keine Preisdaten → volles Fenster
-            $this->SetECOWindow(1, $startH, 0, $endH, 0, 100, 65407);
-            $this->emsLog(EMS_LOG_BASIC, sprintf(
-                'PlanNightCharge: Keine PT15M-Daten → volles Fenster %02d:00-%02d:00', $startH, $endH
-            ));
-            return;
+            if ($enwgActive && $this->slotInEnwgWindow($hourOfSlot, $enwgStartH, $enwgEndH)) {
+                // §14a wird zur Laufzeit reaktiv erzwungen (optimize()-Branch
+                // 1, Netzbetreiber-Pflicht, kein Preis-Vorschlag) -- hier nur
+                // informativ, damit die Plan-Anzeige nicht widerspricht.
+                $plan[$slot] = array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$maxW,
+                    'reason' => '§14a-Fenster (Vorrang vor Plan)');
+                $missingKwh = max(0.0, ($socTargetNight - $soc) / 100.0 * $capKwh);
+                $soc = min(100.0, $soc + (min($missingKwh, $chargeKw * 0.25) / max(0.001, $capKwh) * 100.0));
+                continue;
+            }
+
+            $loadW    = $avgHouseW;
+            $surplusW = $pvW - $loadW;
+
+            if ($price < 0 && $soc < 99.5) {
+                // Negativpreis: immer laden, man wird dafuer bezahlt -- ersetzt
+                // die alte separate PlanNegativePriceExport()-Funktion, ist
+                // jetzt einfach eine weitere Regel im selben Tagesplan.
+                $plan[$slot] = array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$maxW,
+                    'reason' => sprintf('Negativpreis %.2fct -- immer laden', $price * 100));
+                $missingKwh = max(0.0, (100.0 - $soc) / 100.0 * $capKwh);
+                $soc = min(100.0, $soc + (min($missingKwh, $chargeKw * 0.25) / max(0.001, $capKwh) * 100.0));
+                continue;
+            }
+
+            if ($surplusW > $fcMinPower) {
+                if ($soc < ($socTargetDay - $hystSoc)) {
+                    $plan[$slot] = array('op' => EMS_OP_PV_SELFUSE, 'gw' => GW_MODE_CHARGE_PV, 'power' => 0,
+                        'reason' => sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%)', $surplusW, $socTargetDay));
+                    $gainKwh = $surplusW / 1000.0 * 0.25;
+                    $soc = min(100.0, $soc + ($gainKwh / max(0.001, $capKwh) * 100.0));
+                    continue;
+                }
+                $plan[$slot] = array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => (int)$pvW,
+                    'reason' => sprintf('Akku am Ziel (SOC=%.0f%%), PV-Vollernte %.0fW exportieren', $soc, $pvW));
+                continue;
+            }
+
+            // Kein PV-Ueberschuss -- Batterie vs. Netz.
+            if ($feedTariff > ($price + 0.001) && $soc > ($socMin + $socReserve + $hystSoc)) {
+                // Bezug ist JETZT billiger als die Einspeiseverguetung -- die
+                // gespeicherte Energie ist mehr wert, wenn sie exportiert
+                // wird, als wenn sie den (billigeren) Netzbezug ersetzt.
+                // Hausverbrauch wird stattdessen guenstig aus dem Netz
+                // gedeckt (Dietmars Vorgabe, 19.08.2026 -- typischer
+                // Mittags-Fall bei niedrigen Spotpreisen).
+                $plan[$slot] = array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
+                    'reason' => sprintf('Bezug %.2fct < Einspeiseverguetung %.2fct -- Batterie exportiert, Haus aus Netz', $price * 100, $feedTariff * 100));
+                $lossKwh = $loadW / 1000.0 * 0.25;
+                $soc = max(0.0, $soc - ($lossKwh / max(0.001, $capKwh) * 100.0));
+                continue;
+            }
+
+            $missingKwh  = max(0.0, ($socTargetNight - $soc) / 100.0 * $capKwh);
+            $neededSlots = ($chargeKw > 0) ? (int)ceil($missingKwh / ($chargeKw * 0.25)) : 0;
+            if ($neededSlots > 0 && $cheapRank[$slot] < $neededSlots && $price < ($thCharge + 0.05)) {
+                $plan[$slot] = array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$maxW,
+                    'reason' => sprintf('Rang %d der guenstigsten Slots (%.2fct), Nachtziel %.0f%% noch offen', $cheapRank[$slot] + 1, $price * 100, $socTargetNight));
+                $soc = min(100.0, $soc + (min($missingKwh, $chargeKw * 0.25) / max(0.001, $capKwh) * 100.0));
+                continue;
+            }
+
+            if ($price > $thExport && $price > $feedTariff && $soc > ($socMin + $socReserve + $hystSoc)) {
+                $plan[$slot] = array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
+                    'reason' => sprintf('Export: %.2fct > Einspeiseverguetung %.2fct', $price * 100, $feedTariff * 100));
+                $lossKwh = $loadW / 1000.0 * 0.25;
+                $soc = max(0.0, $soc - ($lossKwh / max(0.001, $capKwh) * 100.0));
+                continue;
+            }
+
+            if ($price > $thDischarge && $soc > ($socMin + $socReserve + $hystSoc)) {
+                $plan[$slot] = array('op' => EMS_OP_DISCHARGE, 'gw' => GW_MODE_DISCHARGE, 'power' => 0,
+                    'reason' => sprintf('Bezug %.2fct teuer -- Eigenverbrauch aus Batterie', $price * 100));
+                $lossKwh = $loadW / 1000.0 * 0.25;
+                $soc = max(0.0, $soc - ($lossKwh / max(0.001, $capKwh) * 100.0));
+                continue;
+            }
+
+            $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0,
+                'reason' => sprintf('Automatik: Bezug %.2fct guenstiger als Alternative', $price * 100));
         }
 
-        $best = $this->findCheapestBlock($window, $neededSlots);
+        $this->WriteAttributeString('DayPlan', json_encode($plan));
+        $this->WriteAttributeString('DayPlanSignature', $signature);
+        $this->emsLog(EMS_LOG_BASIC, sprintf('Tagesplan neu berechnet (ab Slot %d/96, Preis-Signatur %s)', $nowSlot, substr(md5($todayJson), 0, 8)));
 
-        // Slot-Nummer → Uhrzeit
-        $sSlot  = $best['start'] % 96; // Slot innerhalb eines Tages (0-95)
-        $eSlot  = $best['end']   % 96;
-        $sMin   = $sSlot * 15;
-        $eMin   = ($eSlot + 1) * 15;   // Ende ist exklusiv
-        $sH2    = (int)($sMin / 60);
-        $sM2    = $sMin % 60;
-        $eH2    = (int)($eMin / 60);
-        $eM2    = $eMin % 60;
-        if ($eH2 >= 24) { $eH2 = 23; $eM2 = 59; }
-
-        $this->SetECOWindow(1, $sH2, $sM2, $eH2, $eM2, 100, 65407);
-        $this->emsLog(EMS_LOG_BASIC, sprintf(
-            'PlanNightCharge: %02d:%02d-%02d:%02d (%d x 15min, %.2f kWh noetig, Ø %.4f EUR/kWh)',
-            $sH2, $sM2, $eH2, $eM2, $neededSlots, $neededKwh, $best['avg_price']
-        ));
+        $this->writeDayPlanEvent($plan);
     }
 
     /**
-     * Solarspitzengesetz-Strategie: Schafft VOR einem erwarteten
-     * Negativpreis-Fenster genug freien Speicherplatz, damit der
-     * PV-Ueberschuss waehrend der Negativpreis-Zeit in den Speicher
-     * wandert statt unverguetet (oder mit Kosten, da Preis < 0) ins
-     * Netz zu gehen. Der so "gerettete" Strom wird spaeter, sobald der
-     * Preis wieder positiv ist, regulaer entladen/eingespeist — das
-     * macht die normale Tages-Optimierung (optimize()) von selbst,
-     * diese Funktion muss dafuer nichts Zusaetzliches tun.
-     *
-     * Spiegelbild zu PlanNightCharge(): dort wird der Speicher VOR einem
-     * Billigpreis-Fenster geleert, um Platz fuers Laden zu schaffen; hier
-     * wird er VOR einem Negativpreis-Fenster geleert (Slot 2 statt 1),
-     * um Platz fuer PV-Aufnahme zu schaffen.
-     *
-     * Bewusst vereinfachtes Lastmodell: es gibt noch keine externe
-     * Lastprognose-Anbindung (LFC_GetForecast) im EMS-Kern, deshalb wird
-     * der Hausverbrauch waehrend des Fensters mit einem konfigurierbaren
-     * Mittelwert geschaetzt (NEG_Avg_House_Load_W) statt einer echten
-     * Prognose. Sauberer waere eine direkte LFC-Anbindung — als
-     * naechster Ausbauschritt vorgemerkt, nicht Teil dieser ersten Fassung.
+     * Liest fuer den AKTUELLEN Viertelstunden-Slot nach, was BuildDayPlan()
+     * dort vorgesehen hat. Sicherheitsnetz: der Plan kann Stunden alt sein
+     * (Prognose-basiert) -- der echte IST-SOC hat immer Vorrang vor der
+     * Plan-Annahme. Gibt null zurueck, wenn kein Plan vorliegt oder die
+     * Realitaet der Plan-Annahme sichtbar widerspricht (dann faellt
+     * optimize() auf die Automatik zurueck statt stur weiterzumachen).
      */
-    public function PlanNegativePriceExport()
+    private function applyPlanSlot($s)
     {
-        if (!$this->ReadPropertyBoolean('NEG_PRICE_Active')) {
-            $this->emsLog(EMS_LOG_VERBOSE, 'PlanNegativePriceExport: Solarspitzen-Strategie deaktiviert');
-            return;
+        $plan = $this->loadDayPlan();
+        if (empty($plan)) { return null; }
+
+        $slotIndex = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
+        if (!isset($plan[$slotIndex])) { return null; }
+        $slot = $plan[$slotIndex];
+        $op   = $slot['op'] ?? EMS_OP_AUTO;
+
+        if (!$s['bat_active']) { return null; }
+
+        $socMin     = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
+        $socReserve = (float)$this->ReadPropertyInteger('BAT_SOC_Reserve_Backup');
+        if (in_array($op, array(EMS_OP_DISCHARGE, EMS_OP_EXPORT), true) && $s['bat_soc'] <= ($socMin + $socReserve)) {
+            return null; // Plan wollte entladen/exportieren, SOC ist aber schon an der Reserve
         }
-        if (!$this->ReadPropertyBoolean('TIBBER_Active') || !$this->ReadPropertyBoolean('BAT_Active')) {
-            $this->emsLog(EMS_LOG_BASIC, 'PlanNegativePriceExport: braucht Tibber + Batterie aktiv');
-            return;
-        }
-
-        $window = $this->findNegativePriceWindow();
-        if (empty($window)) {
-            $this->emsLog(EMS_LOG_BASIC, 'PlanNegativePriceExport: kein Negativpreis-Fenster in den naechsten 48h gefunden');
-            return;
-        }
-
-        $fromSlot = min(array_keys($window));
-        $toSlot   = max(array_keys($window));
-
-        // Erwarteten PV-Ueberschuss waehrend des Negativpreis-Fensters schaetzen
-        $pvDuringWindowKwh = $this->parseForecastForSlots($fromSlot, $toSlot);
-        $avgHouseW  = (float)$this->ReadPropertyInteger('NEG_Avg_House_Load_W');
-        $hoursInWin = count($window) / 4.0; // 15-Min-Slots -> Stunden
-        $houseDuringWindowKwh = $avgHouseW / 1000.0 * $hoursInWin;
-
-        $neededHeadroomKwh = max(0.0, $pvDuringWindowKwh - $houseDuringWindowKwh);
-        if ($neededHeadroomKwh <= 0.1) {
-            $this->emsLog(EMS_LOG_BASIC, sprintf(
-                'PlanNegativePriceExport: PV-Vorschau (%.1f kWh) deckt den geschaetzten Hausverbrauch (%.1f kWh) im Negativpreis-Fenster bereits ab, kein Vorentladen noetig',
-                $pvDuringWindowKwh, $houseDuringWindowKwh
-            ));
-            return;
+        if ($op === EMS_OP_NET_CHARGE && $s['bat_soc'] >= 99.5) {
+            return null; // schon voll -- Plan-Annahme ueberholt
         }
 
-        // Aktuellen SOC/Kapazitaet lesen, Ziel-SOC vor dem Fenster berechnen
-        $soc1 = (float)$this->readVar('VAR_BAT1_SOC', 0);
-        if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
-            $soc = ($soc1 + (float)$this->readVar('VAR_BAT2_SOC', 0)) / 2.0;
-        } else {
-            $soc = $soc1;
+        $thWB  = (float)$this->ReadPropertyFloat('TIB_Threshold_WB');
+        $price = $s['tib_price_eff'];
+        $wb1En = ($s['wb_active'] && $s['wb1_cable'] > 0 && $s['wb1_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
+        $wb2En = ($s['wb_active'] && $s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
+
+        return array(
+            'op_mode'    => $op,
+            'gw_mode'    => $slot['gw'] ?? GW_MODE_AUTO,
+            'gw_power_w' => (int)($slot['power'] ?? 0),
+            'gw_enable'  => true,
+            'wb1_enable' => $wb1En,
+            'wb2_enable' => $wb2En,
+            'reason'     => 'Tagesplan: ' . ($slot['reason'] ?? ''),
+        );
+    }
+
+    private function loadDayPlan()
+    {
+        $json = $this->ReadAttributeString('DayPlan');
+        if (empty($json)) { return array(); }
+        $plan = json_decode($json, true);
+        return is_array($plan) ? $plan : array();
+    }
+
+    /**
+     * Idempotente Erstellung des sichtbaren Tagesplan-Wochenplans als Kind
+     * der EMS-Instanz (Muster: Dietmars Winterskript, Event #10593) --
+     * legt nur an, was fehlt, wie bei den NRG.*-Variablenprofilen.
+     */
+    private function ensureDayPlanEvent()
+    {
+        $eventId = $this->ReadAttributeInteger('DayPlanEventId');
+        if ($eventId > 0 && @IPS_ObjectExists($eventId)) {
+            return $eventId;
         }
-        $capKwh  = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
-        $socMin  = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
 
-        $freeUpPct  = ($capKwh > 0) ? ($neededHeadroomKwh / $capKwh * 100.0) : 0.0;
-        $targetSoc  = max($socMin, $soc - $freeUpPct);
+        $eventId = IPS_CreateEvent(2); // EVENTTYPE_SCHEDULE (Wochenplan)
+        IPS_SetParent($eventId, $this->InstanceID);
+        IPS_SetName($eventId, 'EMS Tagesplan (automatisch)');
+        IPS_SetIdent($eventId, 'EMS_DayPlanEvent');
+        IPS_SetPosition($eventId, 15);
 
-        if ($targetSoc >= $soc - 1.0) {
-            $this->emsLog(EMS_LOG_BASIC, sprintf(
-                'PlanNegativePriceExport: SOC=%.0f%% ist bereits nah am Zielwert %.0f%%, kein Vorentladen noetig',
-                $soc, $targetSoc
-            ));
-            return;
+        foreach ($this->getPlanActions() as $a) {
+            IPS_SetEventScheduleAction($eventId, $a['op'], $a['name'], $a['color']);
         }
+        IPS_SetEventScheduleGroup($eventId, 0, 65535); // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter Wochenrhythmus
+        IPS_SetEventActive($eventId, true);
 
-        // Vorentlade-Fenster: von jetzt bis Fensterbeginn (ECO-Slot 2, um
-        // Slot 1 = Nacht-Laden nicht zu ueberschreiben)
-        $nowSlot = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
-        if ($fromSlot <= $nowSlot) {
-            $this->emsLog(EMS_LOG_BASIC, 'PlanNegativePriceExport: Negativpreis-Fenster hat bereits begonnen, kein Vorlauf mehr moeglich');
-            return;
+        $this->WriteAttributeInteger('DayPlanEventId', $eventId);
+        return $eventId;
+    }
+
+    private function getPlanActions()
+    {
+        return array(
+            array('op' => EMS_OP_AUTO,       'name' => 'Automatik',                 'color' => 0xAAAAAA),
+            array('op' => EMS_OP_PV_SELFUSE, 'name' => 'PV-Eigenverbrauch (laden)', 'color' => 0x4CAF50),
+            array('op' => EMS_OP_NET_CHARGE, 'name' => 'Netz laden',                'color' => 0x2196F3),
+            array('op' => EMS_OP_DISCHARGE,  'name' => 'Eigenverbrauch (entladen)', 'color' => 0xFF9800),
+            array('op' => EMS_OP_EXPORT,     'name' => 'Einspeisen',                'color' => 0x9C27B0),
+        );
+    }
+
+    private function writeDayPlanEvent($plan)
+    {
+        $eventId = $this->ensureDayPlanEvent();
+        if ($eventId <= 0) { return; }
+        $validOps = array(EMS_OP_AUTO, EMS_OP_PV_SELFUSE, EMS_OP_NET_CHARGE, EMS_OP_DISCHARGE, EMS_OP_EXPORT);
+        for ($slot = 0; $slot < 96; $slot++) {
+            $op = $plan[$slot]['op'] ?? EMS_OP_AUTO;
+            if (!in_array($op, $validOps, true)) { $op = EMS_OP_AUTO; }
+            $h = (int)($slot / 4);
+            $m = ($slot % 4) * 15;
+            @IPS_SetEventScheduleGroupPoint($eventId, 0, $slot, $h, $m, 0, $op);
         }
-        $startMin = $nowSlot * 15;
-        $endMin   = $fromSlot * 15;
-        $sH = (int)($startMin / 60) % 24; $sM = $startMin % 60;
-        $eH = (int)($endMin   / 60) % 24; $eM = $endMin   % 60;
+    }
 
-        // Slot 2 = Export/Entladen-Fenster, Zielwert als Prozent kodiert
-        // (SetECOWindow nutzt den powerPct-Parameter generisch als Sollwert)
-        $this->SetECOWindow(2, $sH, $sM, $eH, $eM, (int)round($targetSoc), 65407);
-
-        $this->emsLog(EMS_LOG_BASIC, sprintf(
-            'PlanNegativePriceExport: Negativpreis %02d:%02d-%02d:%02d erwartet, PV-Vorschau %.1f kWh, Hausbedarf %.1f kWh, Speicher wird bis %02d:%02d auf %.0f%% (von %.0f%%) vorentladen',
-            (int)($fromSlot*15/60)%24, ($fromSlot*15)%60, (int)($toSlot*15/60)%24, ($toSlot*15)%60,
-            $pvDuringWindowKwh, $houseDuringWindowKwh, $eH, $eM, $targetSoc, $soc
-        ));
+    /**
+     * Prueft, ob eine gegebene Stunde im §14a-Fenster liegt (auch ueber
+     * Mitternacht hinweg, z.B. 22-6 Uhr). Von isInEnwgWindow() (aktuelle
+     * Stunde) UND BuildDayPlan() (beliebige Slot-Stunde) genutzt.
+     */
+    private function slotInEnwgWindow($hour, $startH, $endH)
+    {
+        if ($startH < $endH) {
+            return ($hour >= $startH && $hour < $endH);
+        }
+        return ($hour >= $startH || $hour < $endH);
     }
 
     // ----------------------------------------------------------------
-    //  Tibber PT15M + PV-Forecast Hilfsmethoden
+    //  Tibber PT15M Hilfsmethode
     // ----------------------------------------------------------------
-
-    /**
-     * Findet das naechste zusammenhaengende Negativpreis-Fenster
-     * (price < 0) in den PT15M-Preisdaten der naechsten 48h.
-     * Gibt [ absoluterSlot => preis ] zurueck, leer falls keins gefunden.
-     */
-    private function findNegativePriceWindow()
-    {
-        $varToday    = $this->ReadPropertyInteger('VAR_TIB_PT15M_Today');
-        $varTomorrow = $this->ReadPropertyInteger('VAR_TIB_PT15M_Tomorrow');
-        $todayJson    = ($varToday    > 0 && IPS_VariableExists($varToday))    ? GetValue($varToday)    : '';
-        $tomorrowJson = ($varTomorrow > 0 && IPS_VariableExists($varTomorrow)) ? GetValue($varTomorrow) : '';
-        $allPrices = array_merge($this->parsePT15M($todayJson), $this->parsePT15M($tomorrowJson));
-
-        $nowSlot = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
-        $window = array();
-        $inWindow = false;
-        for ($slot = $nowSlot; $slot < count($allPrices); $slot++) {
-            if ($allPrices[$slot] < 0) {
-                $window[$slot] = $allPrices[$slot];
-                $inWindow = true;
-            } elseif ($inWindow) {
-                break; // erstes zusammenhaengendes Fenster reicht
-            }
-        }
-        return $window;
-    }
-
-    /**
-     * Summiert die pv_estimate-Werte aus VAR_FC_JSON, deren Zeitstempel
-     * in den angegebenen 15-Min-Slotbereich (heute, absolute Slotzahl
-     * 0-191 wie bei den Preisdaten) faellt.
-     */
-    private function parseForecastForSlots($fromSlot, $toSlot)
-    {
-        $pvfSlots = $this->getPvfSlotsWatt();
-        if (!empty($pvfSlots)) {
-            $sumWh = 0.0;
-            for ($slot = $fromSlot; $slot <= $toSlot; $slot++) {
-                if (!isset($pvfSlots[$slot])) { continue; }
-                $sumWh += (float)$pvfSlots[$slot] * 0.25; // 15-Min-Slot -> Wh
-            }
-            return $sumWh / 1000.0; // kWh
-        }
-
-        // Fallback: alte manuelle VAR_FC_JSON-Verknuepfung
-        $varId = $this->ReadPropertyInteger('VAR_FC_JSON');
-        if ($varId <= 0 || !IPS_VariableExists($varId)) { return 0.0; }
-        $json = GetValue($varId);
-        if (empty($json)) { return 0.0; }
-        $data = json_decode($json, true);
-        if (!is_array($data)) { return 0.0; }
-
-        $today0h = strtotime('today 00:00');
-        $fromTs  = $today0h + $fromSlot * 15 * 60;
-        $toTs    = $today0h + ($toSlot + 1) * 15 * 60;
-
-        $sum = 0.0;
-        foreach ($data as $entry) {
-            if (!is_array($entry)) { continue; }
-            $ts = 0;
-            if (isset($entry['ts']))   { $ts = (int)$entry['ts']; }
-            elseif (isset($entry['tiso'])) { $ts = (int)strtotime($entry['tiso']); }
-            if ($ts < $fromTs || $ts >= $toTs) { continue; }
-            if (isset($entry['pv_estimate'])) { $sum += (float)$entry['pv_estimate']; }
-        }
-        return $sum;
-    }
-
-    /**
-     * Gibt ein assoziatives Array [ absoluterSlot => preis ] fuer das
-     * §14a-Fenster zurueck. Slots 0-95 = heute, 96-191 = morgen.
-     * Ist das Fenster heute schon vorbei, wird das morgige Fenster genutzt.
-     */
-    private function getPT15MWindow($startH, $endH)
-    {
-        $varToday    = $this->ReadPropertyInteger('VAR_TIB_PT15M_Today');
-        $varTomorrow = $this->ReadPropertyInteger('VAR_TIB_PT15M_Tomorrow');
-
-        $todayJson    = ($varToday    > 0 && IPS_VariableExists($varToday))    ? GetValue($varToday)    : '';
-        $tomorrowJson = ($varTomorrow > 0 && IPS_VariableExists($varTomorrow)) ? GetValue($varTomorrow) : '';
-
-        $todayPrices    = $this->parsePT15M($todayJson);
-        $tomorrowPrices = $this->parsePT15M($tomorrowJson);
-        $allPrices      = array_merge($todayPrices, $tomorrowPrices); // Index 0-191
-
-        // Liegt das Fenster noch heute oder schon morgen?
-        $hour       = (int)date('G');
-        $baseOffset = ($hour >= $endH) ? 96 : 0;
-
-        $startSlot  = $baseOffset + $startH * 4;
-        $endSlot    = $baseOffset + $endH   * 4 - 1;
-
-        $window = array();
-        for ($slot = $startSlot; $slot <= $endSlot; $slot++) {
-            if (isset($allPrices[$slot])) {
-                $window[$slot] = (float)$allPrices[$slot];
-            }
-        }
-        return $window;
-    }
 
     /**
      * PT15M-JSON zu einem Array mit genau 96 Preiseintraegen (Index 0-95) parsen.
@@ -1720,48 +1770,6 @@ class EMS extends IPSModule
             }
         }
         return $prices;
-    }
-
-    /**
-     * Findet den kostenguenstigsten konsekutiven Block von $neededSlots
-     * Eintraegen im uebergebenen $window-Array.
-     * Gibt array('start', 'end', 'avg_price') zurueck.
-     */
-    private function findCheapestBlock($window, $neededSlots)
-    {
-        $keys  = array_keys($window);
-        $count = count($keys);
-
-        if ($neededSlots >= $count) {
-            $total = array_sum($window);
-            return array(
-                'start'     => $keys[0],
-                'end'       => $keys[$count - 1],
-                'avg_price' => $count > 0 ? $total / $count : 0.0,
-            );
-        }
-
-        $bestSum   = PHP_INT_MAX;
-        $bestStart = $keys[0];
-        $bestEnd   = $keys[$neededSlots - 1];
-
-        for ($i = 0; $i <= $count - $neededSlots; $i++) {
-            $sum = 0.0;
-            for ($j = $i; $j < $i + $neededSlots; $j++) {
-                $sum += $window[$keys[$j]];
-            }
-            if ($sum < $bestSum) {
-                $bestSum   = $sum;
-                $bestStart = $keys[$i];
-                $bestEnd   = $keys[$i + $neededSlots - 1];
-            }
-        }
-
-        return array(
-            'start'     => $bestStart,
-            'end'       => $bestEnd,
-            'avg_price' => $neededSlots > 0 ? $bestSum / $neededSlots : 0.0,
-        );
     }
 
     /**
@@ -2047,21 +2055,13 @@ class EMS extends IPSModule
 
         $socMin         = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
         $socTargetNight = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
-        $socTargetDay   = $this->getDynamicSocTargetDay();
-        $socReserve     = (float)$this->ReadPropertyInteger('BAT_SOC_Reserve_Backup');
         $hystSoc        = (float)$this->ReadPropertyInteger('OPT_Hysteresis_SOC');
-        $hystPrice      = (float)$this->ReadPropertyFloat('OPT_Hysteresis_Price');
         $maxW           = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
-        $thCharge       = (float)$this->ReadPropertyFloat('TIB_Threshold_Charge');
-        $thDischarge    = (float)$this->ReadPropertyFloat('TIB_Threshold_Discharge');
         $thWB           = (float)$this->ReadPropertyFloat('TIB_Threshold_WB');
-        $thExport       = (float)$this->ReadPropertyFloat('TIB_Threshold_Export');
-        $fcMinPower     = (float)$this->ReadPropertyInteger('FORECAST_Min_Power_W');
 
         $price          = $s['tib_price_eff'];
         $soc            = $s['bat_soc'];
         $pvW            = $s['pv_total_w'];
-        $feedTariff     = $s['tib_feed'];
 
         // ── 1. §14a Nacht-Laden ──────────────────────────────────────
         if ($s['enwg_in_window'] && $s['bat_active'] && $soc < ($socTargetNight - $hystSoc)) {
@@ -2077,37 +2077,12 @@ class EMS extends IPSModule
             return $d;
         }
 
-        // ── 2. Tibber guenstig → Netz laden ─────────────────────────
-        // Nur laden wenn kein ausreichender PV-Ertrag in Kuerze erwartet wird.
-        // fc_next_kwh > 80% des fehlenden SOC-Bedarfs → Netzladen ueberspringen.
-        if ($s['tib_active'] && $s['bat_active'] && $price < ($thCharge - $hystPrice) && $soc < ($socTargetNight - $hystSoc)) {
-            $capKwh     = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
-            $missingKwh = max(0, ($socTargetNight - $soc) / 100.0 * $capKwh);
-            $pvCovers   = ($s['fc_active'] && $s['fc_next_kwh'] >= $missingKwh * 0.80);
-            if (!$pvCovers) {
-                $d['op_mode']    = EMS_OP_NET_CHARGE;
-                $d['gw_mode']    = GW_MODE_AC_IMPORT;
-                $d['gw_power_w'] = (int)$maxW;
-                $d['wb1_enable'] = ($s['wb1_cable'] > 0 && $s['wb1_error'] === 0);
-                $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0);
-                $d['reason']     = sprintf(
-                    'Tibber guenstig: %.2fct < %.2fct, Netz laden (PV-Vorschau %.1f kWh < Bedarf %.1f kWh)',
-                    $price, $thCharge, $s['fc_next_kwh'], $missingKwh
-                );
-                return $d;
-            }
-            $this->emsLog(EMS_LOG_BASIC, sprintf(
-                'Tibber guenstig, aber PV-Vorschau %.1f kWh deckt Bedarf %.1f kWh → kein Netzladen',
-                $s['fc_next_kwh'], $missingKwh
-            ));
-        }
-
         // ── 2b. Gruenste Ladezeit → Netz laden (optional, Vorbild evcc) ──
-        // Alternative zu Branch 2: laedt auch dann aus dem Netz, wenn der
-        // Strommix gerade sehr gruen ist, unabhaengig vom Preis. Bewusst
-        // standardmaessig deaktiviert (GREEN_Charge_Enabled=false) -- nicht
-        // jeder hat StromGedacht installiert oder will nach Gruenstrom statt
-        // Preis optimieren (siehe "keine eigene Anlage als Norm"-Regel).
+        // Bleibt reaktiv statt Teil des Tagesplans: StromGedacht liefert nur
+        // den JETZIGEN Gruenstrom-Index (GSI), keine Prognose fuer kuenftige
+        // Slots -- kann also nicht vorausgeplant werden (Grundregel "keine
+        // eigene Anlage als Norm" -- nicht raten ohne Datengrundlage).
+        // Bewusst standardmaessig deaktiviert (GREEN_Charge_Enabled=false).
         if ($this->ReadPropertyBoolean('GREEN_Charge_Enabled') && $s['bat_active'] && $soc < ($socTargetNight - $hystSoc)) {
             $greenScore = $this->getCurrentGreenScore();
             $greenThreshold = (float)$this->ReadPropertyInteger('GREEN_GSI_Threshold');
@@ -2125,137 +2100,36 @@ class EMS extends IPSModule
             }
         }
 
-        // ── 3. PV-Ueberschuss → Eigenverbrauch ──────────────────────
-        // GW_MODE_CHARGE_PV ("Laden-Solar", Register 47511=2): Batterie-Ziel =
-        // ctl_ems_power(Netzanteil) + PV, lt. GoodWe-Registerdoku (ARM205-HV
-        // Tab. 8-16). $powerW=0 bedeutet "nur PV" -- das setGoodweMode() jetzt
-        // IMMER explizit schreibt (siehe dort), nicht nur bei >0. Live verifiziert
-        // 27.07.2026: mit explizitem 0 faellt der Netzbezug auf 0W; zuvor stand
-        // ein alter Wert (3000) unangetastet im Register, weil powerW=0 frueher
-        // nie geschrieben wurde.
-        if ($pvW > $fcMinPower && $s['bat_active'] && $soc < ($socTargetDay - $hystSoc)) {
-            $d['op_mode']    = EMS_OP_PV_SELFUSE;
-            $d['gw_mode']    = GW_MODE_CHARGE_PV;
-            $d['gw_power_w'] = 0;
-            $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
-            $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
-            $d['reason']     = sprintf('PV-Eigenverbrauch: %.0fW PV, SOC=%.0f%% (Ziel=%.0f%%)', $pvW, $soc, $socTargetDay);
-            return $d;
+        // ── 3. Tagesplan: was hat BuildDayPlan() fuer den aktuellen
+        // Viertelstunden-Slot vorgesehen? (PT15M-Preise + PVF-Prognose +
+        // Lastschaetzung, vorausschauend statt nur reaktiv -- ersetzt die
+        // bisherigen, rein auf dem AKTUELLEN Momentwert basierenden
+        // Branches 2-6, siehe BuildDayPlan()-Kommentar. Materialisiert als
+        // sichtbarer Wochenplan, siehe ensureDayPlanEvent().)
+        $planned = $this->applyPlanSlot($s);
+        if ($planned !== null) {
+            return $planned;
         }
 
-        // ── 3b. Akku am Ziel, PV-Ueberschuss trotzdem exportieren ────
-        // Luecke aus Branch 3: sobald soc >= socTargetDay faellt kein Branch mehr,
-        // Entscheidung landet im Automatik-Fallback (7, ctl_ems_enable=false). Live
-        // bestaetigt 30./31.07.2026 (InverterHub): der WR kappt dort die Erzeugung
-        // auf Eigenverbrauchsniveau statt den Ueberschuss zu exportieren, auch bei
-        // voller Sonne. Deckt sich mit einem von OpenEMS selbst offen markierten
-        // Randproblem (siehe SUITE.md "OpenEMS-Architekturanalyse").
-        //
-        // DRITTER ANLAUF (13.08.2026) nach zwei live gefundenen Fehlern, siehe
-        // SUITE.md "GoodWe-Steuerregister":
-        // 1. AC_EXPORT (Modus 5) nutzt Xset, KEINE reine Ceiling -- der WR erreicht
-        //    den Zielwert notfalls durch Batterie-Entladung. `power=EMS_Max_Power_W`
-        //    (34500W) war also ein aktiver Befehl "entlade die Batterie bis zu
-        //    34500W", nicht nur "hebe die Kappung auf".
-        // 2. Die Bedingung selbst oszillierte mit Branch 7 (Automatik-Fallback),
-        //    weil $pvW die eigene, gerade erst gedrosselte Messung ist. Fix: echte
-        //    Hysterese ueber EXPORT_Min_Dwell_Minutes -- einmal aktiviert, bleibt
-        //    der Branch mindestens so lange aktiv, AUSSER der SOC faellt sichtbar
-        //    unter das Tagesziel (echter Beweis fuer Batterie-Entladung, dann
-        //    sofortiger Sicherheitsausstieg statt Dwell abzuwarten).
-        // Ziel-Deckel jetzt DYNAMISCH aus der PV-Prognose (PVF) statt einer festen,
-        // manuell eingetragenen Wp-Zahl (Dietmars Einwand 13.08.2026: eine feste
-        // Nennleistung ignoriert das Wetter -- an einem bewoelkten Tag waere eine
-        // hohe Nennleistung trotzdem ein Befehl an den WR, den fehlenden Rest aus
-        // der Batterie zu holen). getPvfSlotsWatt() liefert die p50-Prognose je
-        // 15-Min-Slot (bereits fuer parseForecastNextHours() genutzt) -- der
-        // aktuelle Slot ist eine wetterabhaengige, bereits vorhandene Schaetzung
-        // der real erreichbaren PV-Leistung, kein neues Bauteil noetig. Ohne
-        // installierte PVF-Instanz bleibt der Branch bewusst INAKTIV statt zu
-        // raten (Grundregel "keine eigene Anlage als Norm").
-        $pvfSlots  = $this->getPvfSlotsWatt();
-        $nowSlot   = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
-        $pvTargetW = isset($pvfSlots[$nowSlot]) ? (float)$pvfSlots[$nowSlot] : 0.0;
-        $houseW    = (float)$s['house_pow_w'];
-        $surplusW  = $pvW - $houseW;
-        $dwellSec  = max(0, $this->ReadPropertyInteger('EXPORT_Min_Dwell_Minutes')) * 60;
-        $enteredTs = $this->ReadAttributeInteger('Export3bEnteredTs');
-
-        $conditionMet = ($pvTargetW > 0) && $s['bat_active']
-            && $soc >= ($socTargetDay - $hystSoc) && $surplusW > $fcMinPower;
-        $socSafetyExit = $enteredTs !== 0 && $soc < ($socTargetDay - $hystSoc - 2.0);
-
-        if ($conditionMet || ($enteredTs !== 0 && !$socSafetyExit && (time() - $enteredTs) < $dwellSec)) {
-            if ($enteredTs === 0) {
-                $enteredTs = time();
-                $this->WriteAttributeInteger('Export3bEnteredTs', $enteredTs);
-            }
-            $d['op_mode']    = EMS_OP_EXPORT;
-            $d['gw_mode']    = GW_MODE_AC_EXPORT;
-            $d['gw_power_w'] = (int)$pvTargetW;
-            $d['wb1_enable'] = ($s['wb1_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb1_error'] === 0);
-            $d['wb2_enable'] = ($s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && (!$s['tib_active'] || $price < $thWB) && $s['wb2_error'] === 0);
-            $d['reason']     = $conditionMet
-                ? sprintf(
-                    'PV-Vollernte: Akku am Ziel (SOC=%.0f%%>=%.0f%%), Xset=%.0fW (PVF-Prognose aktueller Slot) statt Eigenverbrauchs-Deckelung',
-                    $soc, $socTargetDay, $pvTargetW
-                )
-                : sprintf(
-                    'PV-Vollernte (Hysterese, noch %ds): Bedingung kurz nicht erfuellt, bleibe aktiv gegen Oszillation',
-                    max(0, $dwellSec - (time() - $enteredTs))
-                );
-            return $d;
-        }
-        if ($enteredTs !== 0) {
-            $this->WriteAttributeInteger('Export3bEnteredTs', 0);
-            if ($socSafetyExit) {
-                $this->emsLog(EMS_LOG_BASIC, sprintf(
-                    'PV-Vollernte: Sicherheitsausstieg, SOC=%.0f%% unter Ziel-Sicherheitsmarge gefallen',
-                    $soc
-                ));
-            }
-        }
-
-        // ── 4. Tibber teuer → Entladen ───────────────────────────────
-        if ($s['tib_active'] && $s['bat_active'] && $price > ($thDischarge + $hystPrice) && $soc > ($socMin + $hystSoc + $socReserve)) {
-            $d['op_mode']    = EMS_OP_DISCHARGE;
-            $d['gw_mode']    = GW_MODE_DISCHARGE;
-            $d['gw_power_w'] = 0;
-            $d['wb1_enable'] = false;
-            $d['wb2_enable'] = false;
-            $d['reason']     = sprintf('Tibber teuer: %.2fct > %.2fct, Entladen', $price, $thDischarge);
-            return $d;
-        }
-
-        // ── 5. Tibber sehr teuer → Exportieren ──────────────────────
-        if ($s['tib_active'] && $s['bat_active'] && $price > ($thExport + $hystPrice) && $price > $feedTariff && $soc > ($socMin + $hystSoc + $socReserve)) {
-            $d['op_mode']    = EMS_OP_EXPORT;
-            $d['gw_mode']    = GW_MODE_AC_EXPORT;
-            $d['gw_power_w'] = 0;
-            $d['wb1_enable'] = false;
-            $d['wb2_enable'] = false;
-            $d['reason']     = sprintf('Export: %.2fct > Einspeiseverguetung %.2fct', $price, $feedTariff);
-            return $d;
-        }
-
-        // ── 6. Wallbox freigeben wenn Preis akzeptabel ───────────────
-        $wb1En = ($s['wb_active'] && $s['wb1_cable'] > 0 && $s['wb1_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
-        $wb2En = ($s['wb_active'] && $s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
-
-        // ── 7. Fallback: Automatik ───────────────────────────────────
+        // ── 4. Fallback: Automatik (kein Tagesplan vorhanden, z.B. PVF/LFC
+        // fehlt oder noch keine Preisdaten da -- oder das Plan-Sicherheits-
+        // netz in applyPlanSlot() hat ausgeloest) ────────────────────────
         // ctl_ems_enable=false setzen (siehe Kommentar bei $d-Initialisierung):
         // live bestaetigt 30.07.2026, dass enable=true+mode=Automatik den WR
         // in einen "3rd party EMS"-Wartezustand versetzt (kaum PV-Ernte, wartet
         // auf expliziten Sollwert), waehrend enable=false die volle autonome
         // Selbstverbrauchslogik des WR aktiviert -- genau das, was der Fallback
         // eigentlich will.
+        $wb1En = ($s['wb_active'] && $s['wb1_cable'] > 0 && $s['wb1_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
+        $wb2En = ($s['wb_active'] && $s['wb_count'] >= 2 && $s['wb2_cable'] > 0 && $s['wb2_error'] === 0 && (!$s['tib_active'] || $price < $thWB));
+
         $d['op_mode']    = EMS_OP_AUTO;
         $d['gw_mode']    = GW_MODE_AUTO;
         $d['gw_power_w'] = 0;
         $d['gw_enable']  = false;
         $d['wb1_enable'] = $wb1En;
         $d['wb2_enable'] = $wb2En;
-        $d['reason']     = sprintf('Automatik (WR autonom, ctl_ems_enable=false): SOC=%.0f%% Preis=%.2fct PV=%.0fW', $soc, $price, $pvW);
+        $d['reason']     = sprintf('Automatik (WR autonom, ctl_ems_enable=false, kein Tagesplan-Eintrag): SOC=%.0f%% Preis=%.2fct PV=%.0fW', $soc, $price, $pvW);
         return $d;
     }
 
@@ -2623,11 +2497,7 @@ class EMS extends IPSModule
     {
         $startH = $this->ReadPropertyInteger('ENWG14A_Start_Hour');
         $endH   = $this->ReadPropertyInteger('ENWG14A_End_Hour');
-        $hour   = (int)date('G');
-        if ($startH < $endH) {
-            return ($hour >= $startH && $hour < $endH);
-        }
-        return ($hour >= $startH || $hour < $endH);
+        return $this->slotInEnwgWindow((int)date('G'), $startH, $endH);
     }
 
     /**

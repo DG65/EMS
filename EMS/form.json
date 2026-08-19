@@ -312,90 +312,6 @@
                 },
                 {
                     "type": "Label",
-                    "caption": "── Goodwe Zeitfenster (schreibend) ───────────────────"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time1_Start",
-                    "caption": "Startzeit 1"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time1_End",
-                    "caption": "Endzeit 1"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time1_Power",
-                    "caption": "Batterieleistung 1 in Prozent"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time1_Week",
-                    "caption": "Arbeitswoche 1"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time2_Start",
-                    "caption": "Startzeit 2"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time2_End",
-                    "caption": "Endzeit 2"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time2_Power",
-                    "caption": "Batterieleistung 2 in Prozent"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time2_Week",
-                    "caption": "Arbeitswoche 2"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time3_Start",
-                    "caption": "Startzeit 3"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time3_End",
-                    "caption": "Endzeit 3"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time3_Power",
-                    "caption": "Batterieleistung 3 in Prozent"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time3_Week",
-                    "caption": "Arbeitswoche 3"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time4_Start",
-                    "caption": "Startzeit 4"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time4_End",
-                    "caption": "Endzeit 4"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time4_Power",
-                    "caption": "Batterieleistung 4 in Prozent"
-                },
-                {
-                    "type": "SelectVariable",
-                    "name": "VAR_WR_Time4_Week",
-                    "caption": "Arbeitswoche 4"
-                },
-                {
-                    "type": "Label",
                     "caption": "── PV Messwerte (lesend) ──────────────────────────────"
                 },
                 {
@@ -1110,22 +1026,17 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "☀️⚡ Solarspitzengesetz — Speicher-Vorentladung bei Negativpreisen",
+            "caption": "📅 Tagesplan",
             "expanded": false,
             "items": [
                 {
-                    "type": "CheckBox",
-                    "name": "NEG_PRICE_Active",
-                    "caption": "Vor Negativpreis-Fenstern Speicherplatz freimachen"
-                },
-                {
                     "type": "Label",
-                    "caption": "Braucht Tibber + Batterie + PV-Forecast aktiv. Schafft rechtzeitig genug freien Speicherplatz, damit PV-Überschuss während negativer Börsenpreise in den Speicher statt unvergütet ins Netz geht — Einspeisung später bei positivem Preis."
+                    "caption": "Braucht Tibber (PT15M-Preise) + Batterie aktiv, PV-Prognose (PVF) optional. Berechnet automatisch bei neuen Preisen einen Plan für den ganzen Tag (Laden/Entladen/Einspeisen je Viertelstunde) und schreibt ihn sichtbar in den Wochenplan \"EMS Tagesplan (automatisch)\" unter dieser Instanz — auch bei negativen Preisen (immer laden) und bei Preisen unter der Einspeisevergütung (Batterie exportiert statt Eigenverbrauch)."
                 },
                 {
                     "type": "NumberSpinner",
                     "name": "NEG_Avg_House_Load_W",
-                    "caption": "Geschätzter durchschnittlicher Hausverbrauch (W) — bis eine echte Lastprognose angebunden ist",
+                    "caption": "Geschätzter durchschnittlicher Hausverbrauch (W) — bis eine echte 15-Minuten-Lastprognose angebunden ist",
                     "minimum": 0,
                     "maximum": 20000,
                     "suffix": " W"
@@ -1291,13 +1202,8 @@
         },
         {
             "type": "Button",
-            "caption": "Nacht-Ladefenster planen",
-            "onClick": "EMS_PlanNightCharge($id);"
-        },
-        {
-            "type": "Button",
-            "caption": "☀️⚡ Negativpreis-Vorentladung planen",
-            "onClick": "EMS_PlanNegativePriceExport($id);"
+            "caption": "📅 Tagesplan neu berechnen",
+            "onClick": "EMS_BuildDayPlan($id, true);"
         }
     ]
 }

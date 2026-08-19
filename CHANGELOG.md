@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.21.0 (2026-08-19)
+- **Tagesplan ersetzt die alten SetECOWindow()-Planer (PlanNightCharge/
+  PlanNegativePriceExport) UND die rein reaktiven Preis-Branches 2-6 in
+  optimize().** Auslöser: Dietmar konnte EMS' Verhalten nicht nachvollziehen
+  ("wusste nie, was als nächstes passiert") — Ursache war, dass zwei komplett
+  unabhängige Steuerpfade nebeneinander liefen: der live laufende, reaktive
+  `optimize()`/`applyDecision()`-Kreislauf (schreibt über InverterHub
+  `ctl_ems_*`) und die nur per Formular-Button auslösbaren, nie automatisch
+  aufgerufenen `SetECOWindow()`-Funktionen (schrieben direkt in die
+  Goodwe-eigenen ECO-Zeitfenster-Register) — letztere hatten gegen den
+  laufenden `optimize()`-Kreislauf keine Chance, blieben aber ohne Hinweis
+  im Formular stehen.
+  Neue `BuildDayPlan()` berechnet bei jeder neuen Tibber-PT15M-Preislieferung
+  (automatisch, in `Update()`, nicht mehr nur auf Klick) einen Plan für alle
+  96 Viertelstunden des Tages aus PT15M-Preisen + PV-Prognose (PVF) +
+  Lastschätzung (LFC-Tagesfenster falls verfügbar, sonst der bisherige feste
+  Mittelwert `NEG_Avg_House_Load_W`), simuliert dabei den SOC-Verlauf vor und
+  schreibt das Ergebnis sichtbar in einen echten Symcon-Wochenplan ("EMS
+  Tagesplan (automatisch)", Kind der EMS-Instanz) — Vorbild: Dietmars eigenes
+  Winterskript (IPS-Objekt #55729), das genau so schon rang-basiert die
+  günstigsten Viertelstunden auswählte und in einen sichtbaren Wochenplan
+  schrieb, nur eben manuell statt automatisch.
+  `optimize()` fragt für den aktuellen Slot nur noch beim Plan nach
+  (`applyPlanSlot()`) statt live gegen feste Schwellwerte zu entscheiden;
+  §14a-Zwangsladefenster, Batterie-Boost, Grid Rewards und die (mangels
+  Prognosedaten weiterhin rein reaktive) "Grünste Ladezeit"-Option bleiben
+  als Override vor dem Plan bestehen — das sind harte Vorgaben bzw.
+  Echtzeit-Befehle, keine Preis-Vermutungen, die man vorausplanen könnte.
+  Sicherheitsnetz: weicht der echte SOC sichtbar von der Plan-Annahme ab
+  (z. B. Batterie schon leer, obwohl der Plan noch entladen will), fällt
+  `applyPlanSlot()` auf `null` zurück und `optimize()` landet in der
+  bekannten Automatik-Fallback-Stufe.
+- **Neue Export-Regel: Bezugspreis unter Einspeisevergütung → Batterie
+  exportiert, Hausverbrauch aus dem Netz.** Dietmars Vorgabe (19.08.2026):
+  wenn der aktuelle/geplante Bezugspreis niedriger ist als die
+  Einspeisevergütung (typischer Mittags-Fall bei viel PV im Netz), ist der
+  gespeicherte Strom mehr wert, wenn er exportiert wird, als wenn er den
+  ohnehin schon billigen Netzbezug ersetzt — vorher deckte kein Branch
+  diesen Fall ab, die Batterie wurde in dieser Situation für Eigenverbrauch
+  entladen statt exportiert.
+- **Negativpreis-Handling ist jetzt eine normale Regel im Tagesplan** (immer
+  laden bei Preis < 0 EUR/kWh) statt einer separaten, nur manuell
+  auslösbaren Funktion (`PlanNegativePriceExport`) — deckt denselben Fall
+  ab wie die bisherige "Solarspitzengesetz"-Vorentladung, jetzt konsistent
+  Teil derselben Tagesplanung statt eines zweiten Mechanismus.
+- Entfernt: `SetECOWindow()`, `PlanNightCharge()`, `PlanNegativePriceExport()`,
+  `findNegativePriceWindow()`, `parseForecastForSlots()`, `getPT15MWindow()`,
+  `findCheapestBlock()`, Property `NEG_PRICE_Active`, Properties
+  `VAR_WR_Time1-4_Start/End/Power/Week` (Goodwe-ECO-Zeitfenster-Register,
+  Formular-Buttons "Nacht-Ladefenster planen"/"☀️⚡ Negativpreis-Vorentladung
+  planen"). `NEG_Avg_House_Load_W` bleibt als allgemeiner
+  Lastprognose-Fallback für den Tagesplan erhalten (umbenannte Rolle, gleiche
+  Property-ID — keine Bestandsinstallation verliert dadurch ihren Wert).
+- Neuer Button "📅 Tagesplan neu berechnen" (`EMS_BuildDayPlan($id, true)`).
+
 ## 0.20.0 (2026-08-15)
 - **Branch 3b (PV-Vollernte): Zielwert kommt jetzt aus der PV-Prognose (PVF)
   statt einer festen, manuell eingetragenen Wp-Zahl.** Dietmars berechtigter
