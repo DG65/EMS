@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.21.3 (2026-08-20)
+- **Neu: Status-Zeile über dem manuellen PT15M-Fallback-Feld** — zeigt jetzt
+  direkt im Formular (nicht nur im "🔗 Verbund-Status"-Panel weiter oben),
+  ob und womit `VAR_TIB_PT15M_Today` gerade automatisch überholt ist:
+  ✅ automatisch verbunden (Instanz + Slot-Anzahl), ⚠️ Partnerinstanz
+  gefunden aber ohne brauchbare Daten, oder ℹ️ keine Instanz gefunden.
+  Auslöser: Dietmars Einwand, dass ein leeres Auswahlfeld allein nicht
+  erkennen lässt, ob es überhaupt gebraucht wird. Neue Verbund-Konvention
+  in SUITE.md ("Status neben manuellen Fallback-Feldern") — betrifft alle
+  Module mit `SelectVariable`-Fallback-Feldern neben einer automatischen
+  Partner-Discovery, nicht nur EMS/Tibber.
+
 ## 0.21.2 (2026-08-20)
 - **Fix: Tagesplan blieb leer, obwohl Tibber-Preisoptimierung und
   Batteriespeicher aktiv waren** — `BuildDayPlan()` las die PT15M-Preise

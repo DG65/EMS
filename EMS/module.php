@@ -435,6 +435,27 @@ class EMS extends IPSModule
             ));
         }
 
+        // 3b. Status-Zeile ueber dem manuellen PT15M-Fallback-Feld einfuegen —
+        // zeigt live, ob/wie das Feld gerade automatisch ueberholt ist
+        // (Dietmars Einwand 20.08.2026, siehe SUITE.md "Formular-Konvention:
+        // Status neben manuellen Fallback-Feldern"). Sucht das Tibber-Panel
+        // per Caption und splict die Zeile direkt vor VAR_TIB_PT15M_Today ein.
+        foreach ($form['elements'] as &$element) {
+            if (($element['type'] ?? '') === 'ExpansionPanel' && ($element['caption'] ?? '') === '💰 Tibber & Tarif') {
+                foreach ($element['items'] as $idx => $item) {
+                    if (($item['name'] ?? '') === 'VAR_TIB_PT15M_Today') {
+                        array_splice($element['items'], $idx, 0, array(array(
+                            'type'    => 'Label',
+                            'caption' => $this->getPT15MStatusLine(),
+                        )));
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        unset($element);
+
         // 4. Symcon-Forum-Hinweis — nach den Haupteinstellungen, einmalig dismissible
         if (!$this->ReadAttributeBoolean('ForumHintDismissed')) {
             $form['elements'][] = array(
@@ -1200,6 +1221,42 @@ class EMS extends IPSModule
             }
         }
         return (string)$this->readVar('VAR_TIB_PT15M_Today', '');
+    }
+
+    /**
+     * Menschenlesbare Statuszeile fuer das Formular: zeigt an, ob und WOMIT
+     * das Fallback-Feld VAR_TIB_PT15M_Today gerade automatisch versorgt wird
+     * (Dietmars Einwand 20.08.2026: ein Auswahlfeld allein sagt nicht, ob es
+     * durch eine Automatik ueberholt/unnoetig ist). Verbundweites Muster,
+     * siehe SUITE.md "Formular-Konvention: Status neben manuellen Fallback-
+     * Feldern" -- jedes Modul mit einem manuellen SelectVariable-Fallback
+     * neben einer automatischen Discovery sollte diese Zeile analog bauen.
+     */
+    private function getPT15MStatusLine()
+    {
+        $tibberId = $this->getTibberGridRewardInstance();
+        if ($tibberId <= 0) {
+            return 'ℹ️ Keine Tibber-Grid-Reward-Instanz gefunden — Feld unten wird benötigt.';
+        }
+        try {
+            $curve = TIBBERGR_GetPriceCurve($tibberId);
+            if (is_array($curve) && !empty($curve)) {
+                $name = IPS_GetName($tibberId);
+                return sprintf(
+                    '✅ Automatisch verbunden: Tibber Grid Reward #%d ("%s"), %d Preis-Slots geladen — Feld unten wird ignoriert.',
+                    $tibberId, $name, count($curve)
+                );
+            }
+            return sprintf(
+                '⚠️ Tibber Grid Reward #%d gefunden, liefert aber gerade keine Preiskurve — Feld unten als Fallback aktiv.',
+                $tibberId
+            );
+        } catch (Throwable $e) {
+            return sprintf(
+                '⚠️ Tibber Grid Reward #%d gefunden, TIBBERGR_GetPriceCurve fehlgeschlagen (%s) — Feld unten als Fallback aktiv.',
+                $tibberId, $e->getMessage()
+            );
+        }
     }
 
     /**
