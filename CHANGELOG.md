@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.21.1 (2026-08-19)
+- **Fix: `ensureDayPlanEvent()` crashte beim ersten Sync mit
+  `ArgumentCountError` für `IPS_SetEventScheduleAction()`** — die Funktion
+  braucht 5 Parameter (inkl. `$ScriptContent`), nicht 4 wie ursprünglich
+  angenommen (gegen die offizielle Symcon-Doku verifiziert, nicht mehr nur
+  aus Erinnerung übernommen). 5. Parameter bleibt bewusst ein leerer String:
+  der Tagesplan-Event dient nur der Anzeige, ein echter Skript-Inhalt würde
+  IPS' eigenen internen Schedule-Trigger als zweiten, von `optimize()`
+  unabhängigen Steuerpfad aktivieren — genau das Problem, das der Tagesplan
+  beseitigen soll.
+  Nebeneffekt des Fehlers: `ApplyChanges()` stürzte zweimal hintereinander
+  ab, jedesmal bevor die Event-ID im Attribut gespeichert wurde → zwei
+  verwaiste "EMS Tagesplan (automatisch)"-Events mit Ident-Kollision
+  entstanden. Beide über die Symcon-Automatisierungs-Anbindung entfernt.
+  `ensureDayPlanEvent()` speichert die ID jetzt sofort nach dem Anlegen
+  (vor der Aktions-Konfiguration) und konfiguriert die Aktionen bei jedem
+  Aufruf neu (laut Doku idempotent) — repariert einen unvollständig
+  angelegten Event beim nächsten `ApplyChanges()` automatisch, statt ein
+  Duplikat zu erzeugen.
+- **Fix: `catch (Exception $e)` um `ensureDayPlanEvent()`/`BuildDayPlan()`
+  auf `catch (Throwable $e)` geändert** — `ArgumentCountError` (wie oben)
+  erbt von `Error`, nicht `Exception`, ein reines `Exception`-catch fängt
+  solche PHP-Fehlerklassen nicht ab. Ohne diesen Fix hätte der Try/Catch
+  den Absturz gar nicht abgefangen (wie tatsächlich geschehen).
+
 ## 0.21.0 (2026-08-19)
 - **Tagesplan ersetzt die alten SetECOWindow()-Planer (PlanNightCharge/
   PlanNegativePriceExport) UND die rein reaktiven Preis-Branches 2-6 in

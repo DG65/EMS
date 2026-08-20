@@ -312,7 +312,12 @@ class EMS extends IPSModule
         // er noch fehlt (Muster: NRG.*-Variablenprofile).
         try {
             $this->ensureDayPlanEvent();
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
+            // Throwable statt Exception: PHP-Fehlerklassen wie ArgumentCountError
+            // erben von Error, nicht Exception -- ein reines catch(Exception)
+            // haette den live gefundenen IPS_SetEventScheduleAction()-Bug
+            // (19.08.2026) NICHT abgefangen, ApplyChanges() waere trotzdem
+            // abgestuerzt.
             $this->emsLog(EMS_LOG_BASIC, 'Tagesplan-Event konnte nicht angelegt werden: ' . $e->getMessage());
         }
 
@@ -523,7 +528,7 @@ class EMS extends IPSModule
         // er EMS ueberhaupt aktiviert -- siehe SUITE.md-Historie 19.08.2026).
         try {
             $this->BuildDayPlan(false);
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $this->emsLog(EMS_LOG_BASIC, 'Tagesplan-Fehler (Ausfuehrung laeuft unbeeinflusst weiter): ' . $e->getMessage());
         }
 
@@ -1668,23 +1673,36 @@ class EMS extends IPSModule
     private function ensureDayPlanEvent()
     {
         $eventId = $this->ReadAttributeInteger('DayPlanEventId');
-        if ($eventId > 0 && @IPS_ObjectExists($eventId)) {
-            return $eventId;
+        if ($eventId <= 0 || !@IPS_ObjectExists($eventId)) {
+            $eventId = IPS_CreateEvent(2); // EVENTTYPE_SCHEDULE (Wochenplan)
+            IPS_SetParent($eventId, $this->InstanceID);
+            IPS_SetName($eventId, 'EMS Tagesplan (automatisch)');
+            IPS_SetIdent($eventId, 'EMS_DayPlanEvent');
+            IPS_SetPosition($eventId, 15);
+            IPS_SetEventScheduleGroup($eventId, 0, 65535); // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter Wochenrhythmus
+            IPS_SetEventActive($eventId, true);
+
+            // ID SOFORT sichern, bevor die Aktionen konfiguriert werden --
+            // schlaegt das fehl, entsteht beim naechsten Versuch kein zweites
+            // Duplikat mehr (live-Fund 19.08.2026: falscher Parametercount bei
+            // IPS_SetEventScheduleAction() liess ApplyChanges() zweimal
+            // hintereinander abstuerzen, jedesmal BEVOR die ID gespeichert war
+            // -- Ident-Kollision + zwei verwaiste Event-Objekte als Folge).
+            $this->WriteAttributeInteger('DayPlanEventId', $eventId);
         }
 
-        $eventId = IPS_CreateEvent(2); // EVENTTYPE_SCHEDULE (Wochenplan)
-        IPS_SetParent($eventId, $this->InstanceID);
-        IPS_SetName($eventId, 'EMS Tagesplan (automatisch)');
-        IPS_SetIdent($eventId, 'EMS_DayPlanEvent');
-        IPS_SetPosition($eventId, 15);
-
+        // Aktionen bei JEDEM Aufruf neu setzen (laut Symcon-Doku idempotent) --
+        // repariert einen zuvor unvollstaendig konfigurierten Event automatisch
+        // beim naechsten ApplyChanges(), statt dauerhaft kaputt zu bleiben.
+        // 5. Parameter ist Pflicht (ScriptContent) -- leer, weil dieser Event
+        // NUR zur Anzeige dient. Wuerde hier echter Code stehen, haette IPS'
+        // eigener interner Schedule-Trigger einen zweiten, von optimize()/
+        // applyDecision() unabhaengigen Steuerpfad -- genau das Problem, das
+        // der Tagesplan eigentlich beseitigen soll (siehe SUITE.md-Historie).
         foreach ($this->getPlanActions() as $a) {
-            IPS_SetEventScheduleAction($eventId, $a['op'], $a['name'], $a['color']);
+            IPS_SetEventScheduleAction($eventId, $a['op'], $a['name'], $a['color'], '');
         }
-        IPS_SetEventScheduleGroup($eventId, 0, 65535); // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter Wochenrhythmus
-        IPS_SetEventActive($eventId, true);
 
-        $this->WriteAttributeInteger('DayPlanEventId', $eventId);
         return $eventId;
     }
 
