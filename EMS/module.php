@@ -2132,14 +2132,36 @@ class EMS extends IPSModule
     private function writeDayPlanEvent($plan)
     {
         $eventId = $this->ensureDayPlanEvent();
-        if ($eventId <= 0) { return; }
+        if ($eventId <= 0) {
+            $this->emsLog(EMS_LOG_BASIC, 'writeDayPlanEvent: ensureDayPlanEvent() lieferte keine gueltige Event-ID -- Tagesplan-Kalender NICHT geschrieben.');
+            return;
+        }
         $validOps = array(EMS_OP_AUTO, EMS_OP_PV_SELFUSE, EMS_OP_NET_CHARGE, EMS_OP_DISCHARGE, EMS_OP_EXPORT);
+        $ok = 0;
+        $failed = array();
         for ($slot = 0; $slot < 96; $slot++) {
             $op = $plan[$slot]['op'] ?? EMS_OP_AUTO;
             if (!in_array($op, $validOps, true)) { $op = EMS_OP_AUTO; }
             $h = (int)($slot / 4);
             $m = ($slot % 4) * 15;
-            @IPS_SetEventScheduleGroupPoint($eventId, 0, $slot, $h, $m, 0, $op);
+            // Kein '@' mehr (20.08.2026, Live-Fund: Tagesplan blieb trotz
+            // erfolgreicher Berechnung im WebFront leer -- die '@'-
+            // Fehlerunterdrueckung haette das lautlos verschluckt, egal aus
+            // welchem Grund. Fehlschlaege werden jetzt gezaehlt und geloggt,
+            // statt zu verschwinden -- Dietmars "kein Blindflug"-Grundsatz).
+            if (IPS_SetEventScheduleGroupPoint($eventId, 0, $slot, $h, $m, 0, $op)) {
+                $ok++;
+            } else {
+                $failed[] = $slot;
+            }
+        }
+        if (!empty($failed)) {
+            $this->emsLog(EMS_LOG_BASIC, sprintf(
+                'writeDayPlanEvent: %d/%d Slots geschrieben, %d fehlgeschlagen (erste fehlgeschlagene Slots: %s) -- IPS_SetEventScheduleGroupPoint() lieferte false, siehe IPS-Fehlerlog fuer Details.',
+                $ok, count($plan), count($failed), implode(',', array_slice($failed, 0, 5))
+            ));
+        } else {
+            $this->emsLog(EMS_LOG_VERBOSE, sprintf('writeDayPlanEvent: alle %d Slots erfolgreich geschrieben.', $ok));
         }
     }
 

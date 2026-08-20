@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.10 (2026-08-20)
+- **Fehlerunterdrückung (`@`) in `writeDayPlanEvent()` entfernt** — Live-Fund:
+  Dietmar meldete "Noch habe ich nichts im Tagesplan stehen!" **nachdem**
+  der Timer-Fix (0.21.9) bereits griff und `BuildDayPlan()` laut Log
+  erfolgreich lief ("Tagesplan neu berechnet (ab Slot 77/96, Preis-Signatur
+  d7016597)"). `writeDayPlanEvent()` schreibt das Ergebnis per
+  `IPS_SetEventScheduleGroupPoint()` in den sichtbaren Symcon-Wochenplan —
+  aber mit `@` davor, das jeden Fehlschlag lautlos verschluckt hätte, egal
+  aus welchem Grund (z. B. ein Limit an Schedule-Punkten). Jetzt: kein `@`
+  mehr, Erfolge/Fehlschläge werden gezählt und bei mind. einem Fehlschlag
+  explizit geloggt (mit den ersten betroffenen Slot-Nummern) — beim
+  nächsten Lauf zeigt das Log konkret, WAS schiefläuft, statt weiter zu
+  raten.
+
 ## 0.21.9 (2026-08-20)
 - **Kritischer Fix: Tagesplan blieb bei deaktiviertem EMS dauerhaft leer** —
   Dietmars Live-Fund: "Noch habe ich nichts im Tagesplan stehen!" Ursache lag
