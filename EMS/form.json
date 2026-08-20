@@ -965,7 +965,11 @@
                 {
                     "type": "SelectVariable",
                     "name": "VAR_TIB_PT15M_Today",
-                    "caption": "15-Min-Preise Heute JSON"
+                    "caption": "15-Min-Preise Heute JSON (nur Fallback, siehe unten)"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Wird automatisch von einer installierten Tibber-Grid-Reward-Instanz bezogen (TIBBERGR_GetPriceCurve) -- dieses Feld nur ausfuellen, falls keine Tibber-Grid-Reward-Instanz installiert ist oder eine andere Preisquelle genutzt werden soll."
                 },
                 {
                     "type": "SelectVariable",

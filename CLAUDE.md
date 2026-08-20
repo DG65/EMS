@@ -92,13 +92,18 @@ aktivieren — genau das Problem, das der Tagesplan beseitigen soll. Nebenfund:
 `catch (Exception $e)` fängt `ArgumentCountError` NICHT ab (erbt von `Error`),
 jetzt `catch (Throwable $e)` um `ensureDayPlanEvent()`/`BuildDayPlan()`.
 
-**Status:** Beide Commits (`860c8ba`, `c1a7c39`) liegen lokal auf
-`ems-integration`, noch **nicht gepusht** (Dietmar pusht selbst, da die
-Sandbox-Mac-Anbindung kein Netzwerk hat) und am Live-System noch **nicht
-über mehrere Tage verifiziert** — nur der ApplyChanges-Fix wurde bereits
-erfolgreich synct. Vor einem Merge nach `beta`: `EMS_Active` erstmal aus
-lassen, den Tagesplan über "📅 Tagesplan neu berechnen" ein paar Tage nur
-beobachten, dann erst aktivieren.
+**Status (20.08.2026):** Alle Commits sind auf `origin/ems-integration`
+gepusht, am Live-System aber **noch nicht mehrtägig verifiziert**.
+
+**Live-Fund 20.08.2026:** Der Tagesplan blieb auf Dietmars Anlage leer,
+obwohl Tibber-Preisoptimierung + Batteriespeicher aktiv waren — Ursache:
+`BuildDayPlan()` las die PT15M-Preise nur ueber eine manuelle Property statt
+ueber die laengst vorhandene automatische Tibber-Grid-Reward-Discovery.
+Gefixt in 0.21.2 (`getPT15MTodayJson()`, siehe CHANGELOG + SUITE.md-Muster
+"neue Konsumenten-Features muessen den bestehenden Discovery-Mechanismus
+nutzen"). Vor einem Merge nach `beta`: `EMS_Active` weiterhin aus lassen,
+den Tagesplan über "📅 Tagesplan neu berechnen" ein paar Tage nur
+beobachten (jetzt mit tatsächlich befülltem Plan), dann erst aktivieren.
 
 ## Arbeitsregeln (kondensiert, Details in SUITE.md)
 

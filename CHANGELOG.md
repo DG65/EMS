@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.21.2 (2026-08-20)
+- **Fix: Tagesplan blieb leer, obwohl Tibber-Preisoptimierung und
+  Batteriespeicher aktiv waren** — `BuildDayPlan()` las die PT15M-Preise
+  bisher ausschließlich aus der manuell zu verknüpfenden Property
+  `VAR_TIB_PT15M_Today`, nicht über die automatische Partner-Erkennung, die
+  `Discover()` für Tibber Grid Reward längst besitzt (dieselbe Instanz wird
+  dort schon für `TIBBERGR_GetTariffConfig`/`GetActiveControls` automatisch
+  gefunden). Fund von Dietmar live an seiner Anlage: Formular zeigte bei
+  "15-Min-Preise Heute JSON" "Kein(e)" — kein manueller Fix nötig, sondern
+  ein handwerklicher Fehler beim Tagesplan-Umbau (0.21.0), der den
+  bestehenden Automatik-Anspruch nicht konsequent zu Ende gezogen hat.
+  Neue private Methode `getPT15MTodayJson()`: ruft zuerst automatisch
+  `TIBBERGR_GetPriceCurve()` von einer über `getTibberGridRewardInstance()`
+  gefundenen Instanz ab; nur wenn keine Tibber-Grid-Reward-Instanz installiert
+  ist oder der Aufruf nichts Brauchbares liefert, fällt es auf die manuelle
+  Property zurück (jetzt klar als Fallback beschriftet, Formular-Hinweistext
+  ergänzt). Kein Datenverlust für Installationen, die die manuelle
+  Verknüpfung schon nutzen — reine Zusatz-Automatik.
+
 ## 0.21.1 (2026-08-19)
 - **Fix: `ensureDayPlanEvent()` crashte beim ersten Sync mit
   `ArgumentCountError` für `IPS_SetEventScheduleAction()`** — die Funktion

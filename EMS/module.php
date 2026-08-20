@@ -1168,6 +1168,40 @@ class EMS extends IPSModule
         return !empty($list) ? $list[0] : 0;
     }
 
+    private function getTibberGridRewardInstance()
+    {
+        if (!function_exists('TIBBERGR_GetPriceCurve')) { return 0; }
+        $list = IPS_GetInstanceListByModuleID(GUID_TIBBERGRIDREWARD);
+        return !empty($list) ? $list[0] : 0;
+    }
+
+    /**
+     * Liefert die heutigen PT15M-Preise als JSON, fuer BuildDayPlan().
+     * Bevorzugt: automatisch ueber TIBBERGR_GetPriceCurve() von der schon
+     * durch Discover() gefundenen Tibber-Grid-Reward-Instanz -- das ist der
+     * gleiche Automatik-Anspruch, den EMS fuer Batterie/PV via InverterHub
+     * schon einloest (20.08.2026, Dietmars berechtigter Einwand: "warum ein
+     * Verbund, wenn ich Luecken selbst manuell verknuepfen muss"). Fällt nur
+     * zurueck auf die manuelle Property VAR_TIB_PT15M_Today, wenn keine
+     * Tibber-Grid-Reward-Instanz installiert ist oder der Aufruf nichts
+     * Brauchbares liefert (z.B. andere Tibber-Anbindung, eigene Quelle).
+     */
+    private function getPT15MTodayJson()
+    {
+        $tibberId = $this->getTibberGridRewardInstance();
+        if ($tibberId > 0) {
+            try {
+                $curve = TIBBERGR_GetPriceCurve($tibberId);
+                if (is_array($curve) && !empty($curve)) {
+                    return json_encode($curve);
+                }
+            } catch (Throwable $e) {
+                $this->emsLog(EMS_LOG_BASIC, 'TIBBERGR_GetPriceCurve fehlgeschlagen, falle auf manuelle Verknuepfung zurueck: ' . $e->getMessage());
+            }
+        }
+        return (string)$this->readVar('VAR_TIB_PT15M_Today', '');
+    }
+
     /**
      * Erwarteter PV-Produktionsstart morgen frueh (erster Slot mit echter
      * Erzeugung statt Rauschen) aus PVF_GetForecast(offset=1)['mean'].
@@ -1442,7 +1476,7 @@ class EMS extends IPSModule
      */
     public function BuildDayPlan($force = false)
     {
-        $todayJson = (string)$this->readVar('VAR_TIB_PT15M_Today', '');
+        $todayJson = $this->getPT15MTodayJson();
         $signature = date('Y-m-d') . '|' . md5($todayJson);
 
         if (!$force && $this->ReadAttributeString('DayPlanSignature') === $signature) {
@@ -1454,7 +1488,7 @@ class EMS extends IPSModule
             || !$this->ReadPropertyBoolean('BAT_Active')) {
             $this->WriteAttributeString('DayPlan', '[]');
             $this->WriteAttributeString('DayPlanSignature', $signature);
-            $this->emsLog(EMS_LOG_BASIC, 'BuildDayPlan: keine PT15M-Preisdaten oder Tibber/Batterie inaktiv -- kein Tagesplan moeglich');
+            $this->emsLog(EMS_LOG_BASIC, 'BuildDayPlan: keine PT15M-Preisdaten (weder von Tibber Grid Reward automatisch noch manuell verknuepft) oder Tibber/Batterie inaktiv -- kein Tagesplan moeglich');
             return;
         }
 
