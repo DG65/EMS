@@ -46,12 +46,59 @@ Arbeitsbranch ist `ems-integration` (verbundweit identischer Name) — solange
 die EMS-Integrationsphase läuft, geht ALLES dorthin, auch scheinbar sichere
 Fixes. Merge nach `beta`/`main` erst nach Bewährung an Dietmars Live-Anlage.
 
-## Bekannte Altlasten
+## Aktueller Stand: Tagesplan (19.08.2026, ersetzt SetECOWindow-Planer)
 
-- `README.md` hinkt teils hinter SUITE.md her (Lizenzabschnitt nennt noch MIT
-  — verbindlich ist PolyForm Noncommercial 1.0.0 per SUITE.md; Install-URL
-  enthält einen Platzhalter; Geräteliste nennt noch das go-e-Fremdmodul statt
-  ChargerHub). Bei Gelegenheit angleichen; bei Widerspruch gilt SUITE.md.
+Auslöser: Dietmar konnte EMS' Verhalten nicht nachvollziehen ("wusste nie,
+was als nächstes passiert", musste EMS nach jeder Aktivierung wieder
+abschalten). Ursache: zwei unabhängige Steuerpfade liefen nebeneinander —
+der live laufende, reaktive `optimize()`/`applyDecision()`-Kreislauf (schreibt
+über InverterHub `ctl_ems_*`) und die nur per Formular-Button auslösbaren,
+nie automatisch aufgerufenen `SetECOWindow()`-Funktionen (`PlanNightCharge`/
+`PlanNegativePriceExport`, schrieben direkt in die Goodwe-eigenen
+ECO-Zeitfenster-Register) — letztere hatten gegen den laufenden `optimize()`
+keine Chance, standen aber ohne Hinweis im Formular.
+
+**Was jetzt anders ist:**
+- `BuildDayPlan()` (neu) berechnet bei jeder neuen Tibber-PT15M-Preislieferung
+  automatisch (in `Update()`, nicht mehr nur auf Klick) einen Plan für alle
+  96 Viertelstunden des Tages aus PT15M-Preisen + PV-Prognose (PVF) +
+  Lastschätzung, simuliert dabei den SOC-Verlauf vor und schreibt das Ergebnis
+  sichtbar in einen echten Symcon-Wochenplan ("EMS Tagesplan (automatisch)",
+  Kind der EMS-Instanz) — Vorbild: Dietmars eigenes Winterskript (IPS-Objekt
+  #55729), das genau so schon rang-basiert die günstigsten Viertelstunden
+  auswählte und in einen sichtbaren Wochenplan schrieb, nur manuell statt
+  automatisch.
+- `optimize()` fragt für den aktuellen Slot nur noch beim Plan nach
+  (`applyPlanSlot()`) statt live gegen feste Schwellwerte zu entscheiden.
+  §14a-Zwangsladefenster, Batterie-Boost, Grid Rewards und die (mangels
+  Prognosedaten weiterhin reaktive) "Grünste Ladezeit"-Option bleiben als
+  Override vor dem Plan bestehen — harte Vorgaben/Echtzeit-Befehle, keine
+  Preis-Vermutungen.
+- Neue Regel: Bezugspreis < Einspeisevergütung → Batterie exportiert statt
+  Eigenverbrauch, Hausverbrauch aus dem Netz (Dietmars Vorgabe, deckt den
+  Mittags-Fall bei niedrigen Spotpreisen ab).
+- Entfernt: `SetECOWindow()`, `PlanNightCharge()`, `PlanNegativePriceExport()`,
+  Property `NEG_PRICE_Active`, `VAR_WR_Time1-4_*`-Properties. `NEG_Avg_House_
+  Load_W` bleibt als Lastprognose-Fallback erhalten (umbenannte Rolle, gleiche
+  Property-ID).
+
+**Live-Fund beim ersten Sync (behoben, Commit `c1a7c39`):**
+`IPS_SetEventScheduleAction()` braucht 5 Parameter (inkl. `$ScriptContent`),
+nicht 4 — gegen die offizielle Symcon-Doku verifiziert, nicht mehr nur aus
+Erinnerung übernehmen. Der 5. Parameter bleibt bewusst leer: dieser Event
+dient nur der Anzeige, echter Skript-Inhalt würde IPS' eigenen internen
+Schedule-Trigger als zweiten, von `optimize()` unabhängigen Steuerpfad
+aktivieren — genau das Problem, das der Tagesplan beseitigen soll. Nebenfund:
+`catch (Exception $e)` fängt `ArgumentCountError` NICHT ab (erbt von `Error`),
+jetzt `catch (Throwable $e)` um `ensureDayPlanEvent()`/`BuildDayPlan()`.
+
+**Status:** Beide Commits (`860c8ba`, `c1a7c39`) liegen lokal auf
+`ems-integration`, noch **nicht gepusht** (Dietmar pusht selbst, da die
+Sandbox-Mac-Anbindung kein Netzwerk hat) und am Live-System noch **nicht
+über mehrere Tage verifiziert** — nur der ApplyChanges-Fix wurde bereits
+erfolgreich synct. Vor einem Merge nach `beta`: `EMS_Active` erstmal aus
+lassen, den Tagesplan über "📅 Tagesplan neu berechnen" ein paar Tage nur
+beobachten, dann erst aktivieren.
 
 ## Arbeitsregeln (kondensiert, Details in SUITE.md)
 
