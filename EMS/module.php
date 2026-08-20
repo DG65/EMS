@@ -2102,10 +2102,9 @@ class EMS extends IPSModule
             IPS_SetName($eventId, 'EMS Tagesplan (automatisch)');
             IPS_SetIdent($eventId, 'EMS_DayPlanEvent');
             IPS_SetPosition($eventId, 15);
-            IPS_SetEventScheduleGroup($eventId, 0, 65535); // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter Wochenrhythmus
             IPS_SetEventActive($eventId, true);
 
-            // ID SOFORT sichern, bevor die Aktionen konfiguriert werden --
+            // ID SOFORT sichern, bevor Gruppe/Aktionen konfiguriert werden --
             // schlaegt das fehl, entsteht beim naechsten Versuch kein zweites
             // Duplikat mehr (live-Fund 19.08.2026: falscher Parametercount bei
             // IPS_SetEventScheduleAction() liess ApplyChanges() zweimal
@@ -2114,9 +2113,26 @@ class EMS extends IPSModule
             $this->WriteAttributeInteger('DayPlanEventId', $eventId);
         }
 
-        // Aktionen bei JEDEM Aufruf neu setzen (laut Symcon-Doku idempotent) --
-        // repariert einen zuvor unvollstaendig konfigurierten Event automatisch
-        // beim naechsten ApplyChanges(), statt dauerhaft kaputt zu bleiben.
+        // Schedule-Gruppe UND Aktionen bei JEDEM Aufruf neu setzen (laut
+        // Symcon-Doku idempotent) -- repariert einen zuvor unvollstaendig
+        // konfigurierten Event automatisch beim naechsten ApplyChanges(),
+        // statt dauerhaft kaputt zu bleiben. Live-Fund 20.08.2026: die
+        // Gruppen-Definition (IPS_SetEventScheduleGroup) stand bisher NUR im
+        // einmaligen Erstellungszweig oben -- ein Event, dessen ApplyChanges()
+        // beim allerersten Aufbau vor diesem Schritt abbrach (oder aus einer
+        // frueheren Code-Version stammt, die die Gruppe anders/gar nicht
+        // gesetzt hat), blieb dauerhaft ohne Gruppe 0 stehen. Jeder Versuch,
+        // IPS_SetEventScheduleGroupPoint($eventId, 0, ...) zu schreiben,
+        // scheiterte seitdem mit "Kann Gruppe mit ID 0 nicht finden" -- 96 von
+        // 96 Fehlschlaegen, sichtbar erst NACH dem Entfernen der '@'-
+        // Fehlerunterdrueckung in writeDayPlanEvent() (siehe SUITE.md
+        // Stolperfalle 13). Jetzt wird die Gruppe genauso wie die Aktionen bei
+        // jedem Aufruf neu gesetzt -- heilt einen kaputten Bestands-Event
+        // automatisch beim naechsten ApplyChanges(), ohne dass der Event
+        // manuell geloescht werden muss.
+        // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter Wochenrhythmus:
+        IPS_SetEventScheduleGroup($eventId, 0, 65535);
+
         // 5. Parameter ist Pflicht (ScriptContent) -- leer, weil dieser Event
         // NUR zur Anzeige dient. Wuerde hier echter Code stehen, haette IPS'
         // eigener interner Schedule-Trigger einen zweiten, von optimize()/

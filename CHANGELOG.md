@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.12 (2026-08-20)
+- **Dritter, eigentlicher Grund für den leeren Tagesplan gefunden: die
+  Wochenplan-Gruppe wurde nie (neu) angelegt.** Dank der in 0.21.10
+  entfernten `@`-Fehlerunterdrückung zeigte der nächste Versuch endlich den
+  echten Fehler: "Kann Gruppe mit ID 0 nicht finden", 96/96 Slots
+  fehlgeschlagen. Ursache: `IPS_SetEventScheduleGroup($eventId, 0, 65535)`
+  stand nur im EINMALIGEN Erstellungszweig von `ensureDayPlanEvent()` — bei
+  Dietmars bereits existierendem Event (aus einem früheren, noch fehlerhaften
+  Erstellungsversuch, siehe 0.21.1-Fund) wurde die Gruppe nie nachträglich
+  angelegt, obwohl die Aktionen daneben schon "bei jedem Aufruf neu setzen"
+  liefen. Fix: Gruppen-Definition läuft jetzt genauso wie die Aktionen bei
+  JEDEM `ApplyChanges()` — heilt den kaputten Bestands-Event automatisch,
+  ohne ihn manuell löschen zu müssen.
+
 ## 0.21.11 (2026-08-20)
 - **Fix: "📅 Tagesplan neu berechnen"-Button gab keinerlei Rückmeldung** —
   Dietmars Live-Fund: "Ich drück Tagesplan neu berechnen und sehe ......
