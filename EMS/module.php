@@ -1973,6 +1973,21 @@ class EMS extends IPSModule
                 continue;
             }
 
+            // Keine Preisdaten fuer diesen Slot -- ab hier braucht JEDE
+            // Entscheidung einen echten Preis (Negativpreis-/Export-/
+            // Ladeschwellen). Live-Fund 20.08.2026: frueher fuellte
+            // parsePT15M() fehlende Slots mit 0.0 -- das wurde hier als
+            // "Bezug 0ct, guenstiger als jede Einspeiseverguetung"
+            // fehlinterpretiert und plante faelschlich "Export" fuer
+            // Abendstunden ohne Tibber-Daten. Ohne echten Preis ist Automatik
+            // die einzig ehrliche Entscheidung -- der WR entscheidet dann
+            // selbst, kein geratener Preis-Vorschlag.
+            if ($price === null) {
+                $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0,
+                    'reason' => 'Keine Preisdaten fuer diesen Slot -- Automatik');
+                continue;
+            }
+
             // Kein PV-Ueberschuss -- Batterie vs. Netz.
             if ($feedTariff > ($price + 0.001) && $soc > ($socMin + $socReserve + $hystSoc)) {
                 // Bezug ist JETZT billiger als die Einspeiseverguetung -- die
@@ -2221,15 +2236,35 @@ class EMS extends IPSModule
      *  - Einfaches Zahlen-Array: [0.2345, 0.2234, ...]
      *  - TibberV2-Objekt-Array:  [{"total":0.2345,"startsAt":"2024-01-01T00:00:00+01:00",...},...]
      */
+    /**
+     * Liefert 96 PT15M-Preise (Index 0-95) ODER null je Slot, wenn fuer
+     * diesen Slot KEINE echte Preisangabe vorlag. Frueher wurde ein
+     * fehlender Slot mit 0.0 aufgefuellt -- das sah fuer die
+     * Entscheidungslogik in BuildDayPlan() wie ein ECHTER Preis von 0ct aus
+     * (guenstiger als jede Einspeiseverguetung), was am 20.08.2026 live dazu
+     * fuehrte, dass Abendstunden ohne Tibber-Preisdaten faelschlich als
+     * "Export" statt "Automatik" geplant wurden -- fehlende Daten wurden wie
+     * ein reales Sonderangebot behandelt. `null` macht "keine Daten" jetzt
+     * von "Preis ist tatsaechlich 0" unterscheidbar; der Aufrufer MUSS jeden
+     * Slot auf `null` pruefen, bevor er ihn in eine Preisschwelle einsetzt.
+     *
+     * Zusaetzlich datumsbewusst (20.08.2026): `startsAt` wird nur fuer Slots
+     * uebernommen, deren Kalendertag mit HEUTE uebereinstimmt -- verhindert,
+     * dass eine eventuell schon mitgelieferte Preisangabe fuer MORGEN am
+     * gleichen Uhrzeit-Slot den echten Preis von HEUTE stillschweigend
+     * ueberschreibt (die Slot-Berechnung selbst kennt nur die Uhrzeit, nicht
+     * das Datum).
+     */
     private function parsePT15M($json)
     {
-        $prices = array_fill(0, 96, 0.0);
+        $prices = array_fill(0, 96, null);
         if (empty($json)) { return $prices; }
 
         $data = json_decode($json, true);
         if (!is_array($data) || empty($data)) { return $prices; }
 
-        // Format: einfaches Float-Array
+        // Format: einfaches Float-Array (kein Datumsbezug moeglich -- wird
+        // unveraendert positionsweise als "heute" uebernommen).
         if (isset($data[0]) && is_numeric($data[0])) {
             for ($i = 0; $i < min(96, count($data)); $i++) {
                 $prices[$i] = (float)$data[$i];
@@ -2237,15 +2272,18 @@ class EMS extends IPSModule
             return $prices;
         }
 
+        $today = date('Y-m-d');
         // Format: Objekt-Array mit "total" + "startsAt"
         foreach ($data as $i => $entry) {
             if (!is_array($entry)) { continue; }
-            $price = 0.0;
+            $price = null;
             if (isset($entry['total']))  { $price = (float)$entry['total']; }
             elseif (isset($entry['price'])) { $price = (float)$entry['price']; }
+            if ($price === null) { continue; }
 
             if (isset($entry['startsAt'])) {
-                $ts   = strtotime($entry['startsAt']);
+                $ts = strtotime($entry['startsAt']);
+                if (date('Y-m-d', $ts) !== $today) { continue; } // z.B. schon mitgelieferte Werte fuer morgen
                 $slot = (int)floor(((int)date('H', $ts) * 60 + (int)date('i', $ts)) / 15);
                 if ($slot >= 0 && $slot < 96) {
                     $prices[$slot] = $price;

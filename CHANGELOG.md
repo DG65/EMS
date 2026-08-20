@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.21.14 (2026-08-20)
+- **Fix: fehlende Preisdaten für einen Slot wurden als "0ct, extrem günstig"
+  fehlinterpretiert und lösten fälschlich Export-Entscheidungen aus** —
+  Dietmars Live-Fund: der Tagesplan zeigte heute Abend "Einspeisen", obwohl
+  dafür überhaupt keine sinnvolle Preisgrundlage bestand. Ursache:
+  `parsePT15M()` füllte Slots ohne echte Tibber-Preisangabe mit `0.0` auf —
+  ein "Preis" von 0ct ist aber immer günstiger als jede Einspeisevergütung,
+  was den entsprechenden Branch in `BuildDayPlan()` auslöste, obwohl gar
+  keine Daten vorlagen. `parsePT15M()` liefert jetzt `null` statt `0.0` für
+  Slots ohne echte Daten — klar unterscheidbar von einem tatsächlichen
+  Preis von null. `BuildDayPlan()` erkennt `null`-Preise jetzt explizit und
+  plant für diese Slots "Automatik" statt zu raten. Zusätzlich datumsbewusst
+  gemacht: `startsAt`-Einträge für einen anderen Kalendertag als heute
+  werden ignoriert, damit eventuell schon mitgelieferte Morgen-Preise nicht
+  stillschweigend echte Heute-Preise am selben Uhrzeit-Slot überschreiben.
+
 ## 0.21.13 (2026-08-20)
 - **Fix: `ApplyChanges()` schlug fehl mit "'Day' außerhalb des gültigen
   Bereichs"** — direkte Folge des 0.21.12-Fixes: `IPS_SetEventScheduleGroup()`
