@@ -1861,7 +1861,7 @@ class EMS extends IPSModule
         $signature = date('Y-m-d') . '|' . md5($todayJson);
 
         if (!$force && $this->ReadAttributeString('DayPlanSignature') === $signature) {
-            return;
+            return 'ℹ️ Tagesplan unverändert (gleiche Preisdaten wie beim letzten Lauf) — keine Neuberechnung nötig.';
         }
 
         if (empty($todayJson)
@@ -1870,7 +1870,7 @@ class EMS extends IPSModule
             $this->WriteAttributeString('DayPlan', '[]');
             $this->WriteAttributeString('DayPlanSignature', $signature);
             $this->emsLog(EMS_LOG_BASIC, 'BuildDayPlan: keine PT15M-Preisdaten (weder von Tibber Grid Reward automatisch noch manuell verknuepft) oder Tibber/Batterie inaktiv -- kein Tagesplan moeglich');
-            return;
+            return '⛔ Kein Tagesplan möglich: keine PT15M-Preisdaten (weder automatisch von Tibber Grid Reward noch manuell verknüpft) oder Tibber/Batteriespeicher deaktiviert.';
         }
 
         $prices   = $this->parsePT15M($todayJson);
@@ -2021,7 +2021,18 @@ class EMS extends IPSModule
         $this->WriteAttributeString('DayPlanSignature', $signature);
         $this->emsLog(EMS_LOG_BASIC, sprintf('Tagesplan neu berechnet (ab Slot %d/96, Preis-Signatur %s)', $nowSlot, substr(md5($todayJson), 0, 8)));
 
-        $this->writeDayPlanEvent($plan);
+        $written = $this->writeDayPlanEvent($plan);
+
+        // Rueckgabewert fuer den Formular-Button (20.08.2026, Live-Fund:
+        // "ich druecke den Button und sehe keine Rueckmeldung" -- gleicher
+        // Fehlertyp wie bei "Jetzt neu suchen" zuvor, siehe SUITE.md
+        // Stolperfalle 12. Der Button ruft das jetzt per 'echo' auf (Muster:
+        // bestehender "Status anzeigen"-Button), damit ein sofortiges Popup
+        // erscheint statt gar nichts.
+        if ($written['failed'] > 0) {
+            return sprintf('⚠️ Tagesplan berechnet, aber %d/%d Slots konnten nicht in den Kalender geschrieben werden (siehe Instanz-Debug für Details).', $written['failed'], $written['ok'] + $written['failed']);
+        }
+        return sprintf('✅ Tagesplan neu berechnet und in den Kalender geschrieben (%d Viertelstunden ab Slot %d/96).', $written['ok'], $nowSlot);
     }
 
     /**
@@ -2134,7 +2145,7 @@ class EMS extends IPSModule
         $eventId = $this->ensureDayPlanEvent();
         if ($eventId <= 0) {
             $this->emsLog(EMS_LOG_BASIC, 'writeDayPlanEvent: ensureDayPlanEvent() lieferte keine gueltige Event-ID -- Tagesplan-Kalender NICHT geschrieben.');
-            return;
+            return array('ok' => 0, 'failed' => 96);
         }
         $validOps = array(EMS_OP_AUTO, EMS_OP_PV_SELFUSE, EMS_OP_NET_CHARGE, EMS_OP_DISCHARGE, EMS_OP_EXPORT);
         $ok = 0;
@@ -2163,6 +2174,7 @@ class EMS extends IPSModule
         } else {
             $this->emsLog(EMS_LOG_VERBOSE, sprintf('writeDayPlanEvent: alle %d Slots erfolgreich geschrieben.', $ok));
         }
+        return array('ok' => $ok, 'failed' => count($failed));
     }
 
     /**

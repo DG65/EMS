@@ -1207,7 +1207,7 @@
         {
             "type": "Button",
             "caption": "📅 Tagesplan neu berechnen",
-            "onClick": "EMS_BuildDayPlan($id, true);"
+            "onClick": "echo EMS_BuildDayPlan($id, true);"
         }
     ]
 }

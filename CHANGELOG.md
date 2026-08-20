@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.21.11 (2026-08-20)
+- **Fix: "📅 Tagesplan neu berechnen"-Button gab keinerlei Rückmeldung** —
+  Dietmars Live-Fund: "Ich drück Tagesplan neu berechnen und sehe ......
+  keine Rückmeldung!" Gleicher Fehlertyp wie zuvor beim "Jetzt neu
+  suchen"-Button (SUITE.md Stolperfalle 12), diesmal aber einfacher gelöst:
+  `BuildDayPlan()` liefert jetzt einen menschenlesbaren Ergebnistext zurück
+  (✅ Erfolg mit Slot-Anzahl, ⚠️ Teilerfolg mit Fehlschlag-Anzahl, ⛔ kein
+  Tagesplan möglich mit Grund, ℹ️ unverändert), und der Button ruft das per
+  `echo` auf (Muster: bestehender "Status anzeigen"-Button) — zeigt sofort
+  ein Popup mit dem Ergebnis, statt eines `UpdateFormField()`-Umwegs.
+  `writeDayPlanEvent()` gibt dafür jetzt `['ok'=>N,'failed'=>N]` zurück.
+
 ## 0.21.10 (2026-08-20)
 - **Fehlerunterdrückung (`@`) in `writeDayPlanEvent()` entfernt** — Live-Fund:
   Dietmar meldete "Noch habe ich nichts im Tagesplan stehen!" **nachdem**
