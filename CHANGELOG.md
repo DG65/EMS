@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.4 (2026-08-20)
+- **Neuer Button "🔄 Übernehmen erzwingen (ohne Formularänderung)"** —
+  Dietmars Frage: wie löst man `ApplyChanges()` aus, ohne ein Formularfeld
+  ändern zu müssen (z. B. nach jedem Modul-Update, um einen Code-Fix
+  sofort greifen zu lassen)? Ruft `IPS_ApplyChanges($id)` direkt auf, mit
+  Popup-Bestätigung.
+
 ## 0.22.3 (2026-08-20)
 - **Fix: `EMS_GetDayPlan()` lieferte nach dem 0.22.2-Fix ein zehnfach zu
   kleines `price`** — BuildDayPlan()/`simulateDaySlot()` rechnen intern
