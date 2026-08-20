@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.6 (2026-08-20)
+- **Status je Feld jetzt auch im "⚡ Wechselrichter & PV"-Panel** (gleiches
+  Muster wie Netzmesspunkte/Tibber/Batteriespeicher zuvor). Drei Felder mit
+  echtem Automatik-Pfad (Steuerregister via InverterHub `ctl_ems_*`,
+  PV-Gesamtleistung, WR-Gesamtleistung).
+- **Nebenfund beim Nachsehen:** `VAR_WR_Export_Enable`, `VAR_WR_Export_Limit`,
+  `VAR_PV_Day_Energy`, `VAR_PV_MPPT1-3_Power`, `VAR_WR_Temp`,
+  `VAR_WR_Temp_Cooler`, `VAR_WR_Diag_Status` werden vom Code **aktuell
+  nirgends gelesen** — reine Karteileichen aus einer früheren Version. Die
+  Statuszeile sagt das jetzt ehrlich ("🚫 wird nicht ausgewertet") statt sie
+  als funktionierenden Fallback zu verkaufen. Ob diese Felder entfernt oder
+  endlich verdrahtet werden (v. a. WR-Temperatur/Diagnose wären für
+  Monitoring nützlich), ist eine offene Entscheidung — noch nicht getroffen.
+
 ## 0.21.5 (2026-08-20)
 - **"🔗 Verbund-Status"-Panel neu aufgebaut** — Dietmar gefiel der bisherige
   technische Fließtext ("NRG-Stack Partnermodule: InverterHub=1 MeterHub=1

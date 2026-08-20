@@ -522,6 +522,48 @@ class EMS extends IPSModule
         }
         unset($element);
 
+        // 3e. "Wechselrichter & PV"-Panel: Status-Zeile je Feld (20.08.2026,
+        // Dietmars Folgefrage). Drei echte Automatik-Faelle (Steuerregister,
+        // PV-Gesamtleistung, WR-Gesamtleistung) + mehrere Felder, die vom
+        // Code aktuell gar nicht gelesen werden (ehrlich als 🚫 markiert,
+        // statt sie als Fallback zu verkaufen).
+        $inverterFieldMap = array(
+            'VAR_WR_EMS_Mode'      => 'control',
+            'VAR_WR_EMS_Power'     => null, // Statuszeile nur einmal vor Mode, nicht doppelt vor Power
+            'VAR_WR_Export_Enable' => 'unused',
+            'VAR_WR_Export_Limit'  => 'unused',
+            'VAR_PV_Total_Power'   => 'pv_total',
+            'VAR_PV_Day_Energy'    => 'unused',
+            'VAR_PV_MPPT1_Power'   => 'unused',
+            'VAR_PV_MPPT2_Power'   => null, // eine Zeile fuer alle drei MPPT-Felder reicht
+            'VAR_PV_MPPT3_Power'   => null,
+            'VAR_WR_Total_Power'   => 'wr_total',
+            'VAR_WR_Temp'          => 'unused',
+            'VAR_WR_Temp_Cooler'   => null, // eine Zeile fuer beide Temperaturfelder reicht
+            'VAR_WR_Diag_Status'   => 'unused',
+        );
+        foreach ($form['elements'] as &$element) {
+            if (($element['type'] ?? '') === 'ExpansionPanel' && strpos($element['caption'] ?? '', '⚡ Wechselrichter & PV') === 0) {
+                $newItems = array();
+                foreach ($element['items'] as $item) {
+                    $name = $item['name'] ?? '';
+                    if (array_key_exists($name, $inverterFieldMap) && $inverterFieldMap[$name] !== null) {
+                        $newItems[] = $this->statusLabel($this->getInverterFieldStatusLine($inverterFieldMap[$name]));
+                    }
+                    // Alten Pauschal-Hinweis ganz oben im Panel entfernen -- die
+                    // Zeilen je Feld machen ihn ueberfluessig.
+                    if (($item['type'] ?? '') === 'Label' && isset($item['caption'])
+                        && strpos($item['caption'], 'Nur nötig, falls kein Partnermodul') !== false) {
+                        continue;
+                    }
+                    $newItems[] = $item;
+                }
+                $element['items'] = $newItems;
+                break;
+            }
+        }
+        unset($element);
+
         // 4. Symcon-Forum-Hinweis — nach den Haupteinstellungen, einmalig dismissible
         if (!$this->ReadAttributeBoolean('ForumHintDismissed')) {
             $form['elements'][] = array(
@@ -1398,6 +1440,52 @@ class EMS extends IPSModule
             'caption' => '⛔ PFLICHTFELD: Keine InverterHub-Instanz gefunden UND kein Fallback verknüpft — EMS rechnet sonst mit SOC=0% und trifft falsche Entscheidungen (z. B. unnötiges Nachladen). Bitte unten verknüpfen.',
             'color'   => 0xFF0000,
         );
+    }
+
+    /**
+     * Status-Zeilen fuer das "Wechselrichter & PV"-Fallback-Panel (20.08.2026,
+     * Dietmars Folgefrage: gleiche Unsicherheit wie bei Netzmesspunkte). Beim
+     * Nachschauen zusaetzlich entdeckt: mehrere Felder dort (Export-Enable/
+     * -Limit, PV-Tageserzeugung, MPPT1-3, WR-Temperatur x2, WR-Diagnose)
+     * werden vom Code AKTUELL NIRGENDS gelesen -- weder automatisch noch
+     * manuell, reine Karteileichen aus einer frueheren Version. Das muss die
+     * Statuszeile ehrlich sagen ("wird nicht ausgewertet"), nicht als
+     * "manueller Fallback" verkaufen -- sonst verknuepft der Nutzer etwas,
+     * das nie etwas bewirkt.
+     */
+    private function getInverterFieldStatusLine($field)
+    {
+        $inv = $this->getInverterEntry();
+        switch ($field) {
+            case 'control': // VAR_WR_EMS_Mode + VAR_WR_EMS_Power (setGoodweMode())
+                if ($inv === null) {
+                    return 'ℹ️ Keine InverterHub-Instanz gefunden — Felder unten werden für die Steuerung benötigt.';
+                }
+                $authority = $inv['controlAuthority'] ?? 'none';
+                if ($authority === 'ems' && ($inv['controllable'] ?? false)) {
+                    return sprintf(
+                        '✅ Automatisch verbunden: EMS steuert InverterHub #%d direkt (ctl_ems_*) — Felder unten werden ignoriert.',
+                        $inv['instanceID']
+                    );
+                }
+                return sprintf(
+                    '⚠️ InverterHub #%d gefunden, aber Steuerhoheit liegt nicht bei EMS ("%s") — EMS schreibt hier bewusst nichts, auch nicht über die Felder unten.',
+                    $inv['instanceID'], $authority
+                );
+            case 'pv_total':
+                if ($inv !== null && ($inv['pvPowerID'] ?? 0) > 0) {
+                    return sprintf('✅ Automatisch verbunden: InverterHub #%d liefert die PV-Gesamtleistung — Feld unten wird ignoriert.', $inv['instanceID']);
+                }
+                return 'ℹ️ Keine automatische PV-Gesamtleistung gefunden — Feld unten wird benötigt.';
+            case 'wr_total':
+                if ($inv !== null && ($inv['acPowerID'] ?? 0) > 0) {
+                    return sprintf('✅ Automatisch verbunden: InverterHub #%d liefert die WR-Gesamtleistung — Feld unten wird ignoriert.', $inv['instanceID']);
+                }
+                return 'ℹ️ Keine automatische WR-Gesamtleistung gefunden — Feld unten wird benötigt.';
+            case 'unused':
+                return '🚫 Wird von EMS aktuell nicht ausgewertet (weder automatisch noch über dieses Feld) — eine Verknüpfung hat derzeit keine Wirkung.';
+        }
+        return '';
     }
 
     private function getGridFieldStatusLine($field)
