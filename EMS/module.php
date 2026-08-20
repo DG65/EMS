@@ -325,14 +325,24 @@ class EMS extends IPSModule
         $active   = $this->ReadPropertyBoolean('EMS_Active');
         $interval = $this->ReadPropertyInteger('EMS_Interval');
 
+        // Timer laeuft IMMER, auch wenn EMS_Active=false -- Update() macht
+        // die eigentliche Steuerentscheidung (optimize()/applyDecision())
+        // selbst schon vom EMS_Active-Flag abhaengig (siehe dort), aber der
+        // Gesundheitscheck UND der Tagesplan (BuildDayPlan()) sollen laut
+        // eigenem Kommentar in Update() bewusst auch bei deaktiviertem EMS
+        // laufen, damit Dietmar den Plan vor der Aktivierung beobachten kann.
+        // Bug gefunden 20.08.2026 (Live-Fund: Tagesplan blieb dauerhaft leer,
+        // weil der Timer hier komplett abgeschaltet wurde, sobald EMS aus
+        // war -- Update() wurde dadurch nie periodisch aufgerufen, ganz
+        // unabhaengig davon, dass BuildDayPlan() selbst schon EMS_Active-
+        // unabhaengig geschrieben war).
+        $this->SetTimerInterval('EMS_UpdateTimer', $interval * 1000);
         if ($active) {
-            $this->SetTimerInterval('EMS_UpdateTimer', $interval * 1000);
             $this->SetStatus(102);
             $this->emsLog(EMS_LOG_BASIC, 'EMS gestartet, Intervall: ' . $interval . 's');
         } else {
-            $this->SetTimerInterval('EMS_UpdateTimer', 0);
             $this->SetStatus(104);
-            $this->emsLog(EMS_LOG_BASIC, 'EMS deaktiviert');
+            $this->emsLog(EMS_LOG_BASIC, 'EMS deaktiviert (Gesundheitscheck/Tagesplan laufen weiter)');
         }
 
         $this->SetValue('EMS_Active_State', $active);
@@ -1230,7 +1240,7 @@ class EMS extends IPSModule
      * Fenster sollten vom Trainingsdatensatz ausgeschlossen werden, da sie
      * kein normales Last-/Erzeugungsverhalten widerspiegeln.
      */
-    public function GetSpecialEvents($fromTs = 0, $toTs = 0)
+    public function GetSpecialEvents(int $fromTs = 0, int $toTs = 0)
     {
         $log = json_decode($this->ReadAttributeString('SpecialEventsLog'), true);
         if (!is_array($log)) { $log = array(); }
@@ -1782,7 +1792,7 @@ class EMS extends IPSModule
      * normalen Preis-/PV-Logik. Bricht automatisch ab, sobald SOC die
      * Reserve-Grenze erreicht (siehe optimize()).
      */
-    public function StartBatteryBoost($minutes = 30)
+    public function StartBatteryBoost(int $minutes = 30)
     {
         $minutes = max(1, min(180, (int)$minutes));
         $this->WriteAttributeInteger('BatteryBoostUntil', time() + $minutes * 60);
@@ -1845,7 +1855,7 @@ class EMS extends IPSModule
      * jedem 30-Sekunden-Update()-Tick, nur wenn wirklich neue Tibber-Daten
      * da sind. $force=true (Formular-Button) erzwingt eine Neuberechnung.
      */
-    public function BuildDayPlan($force = false)
+    public function BuildDayPlan(bool $force = false)
     {
         $todayJson = $this->getPT15MTodayJson();
         $signature = date('Y-m-d') . '|' . md5($todayJson);

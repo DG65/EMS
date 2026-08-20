@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.21.9 (2026-08-20)
+- **Kritischer Fix: Tagesplan blieb bei deaktiviertem EMS dauerhaft leer** —
+  Dietmars Live-Fund: "Noch habe ich nichts im Tagesplan stehen!" Ursache lag
+  NICHT (mehr) an den PT15M-Preisen oder dem SOC (0.21.2/0.21.3 hatten die
+  bereits richtig gefixt), sondern eine Ebene tiefer: `ApplyChanges()`
+  schaltete den `EMS_UpdateTimer` komplett ab (`SetTimerInterval(...,  0)`),
+  sobald `EMS_Active=false` war — und genau das ist seit dem Tagesplan-
+  Umbau (19.08.2026) der Dauerzustand, weil `EMS_Active` bewusst erst nach
+  mehrtägiger Beobachtung eingeschaltet werden soll. Ohne laufenden Timer
+  wurde `Update()` nie periodisch aufgerufen, also lief auch `BuildDayPlan()`
+  nie — trotz des eigenen Code-Kommentars dort, der ausdrücklich sagt, der
+  Tagesplan solle UNABHÄNGIG von `EMS_Active` laufen. Der Timer widersprach
+  damit der eigenen Absicht des Codes. Fix: Timer läuft jetzt immer
+  (Intervall aus `EMS_Interval`), unabhängig von `EMS_Active` — nur die
+  Statusmeldung/das Log unterscheiden noch, ob EMS aktiv ist.
+- Nebenbei: fehlende Typangaben bei `BuildDayPlan()`/`GetSpecialEvents()`/
+  `StartBatteryBoost()` ergänzt (PHPLibrary-Warnung beim letzten Modul-Update
+  aufgefallen, rein kosmetisch, keine Funktionsänderung).
+
 ## 0.21.8 (2026-08-20)
 - **Fix: Status-Zeile im Batteriespeicher-Panel stand nur über Batteriestring
   1, nicht über Batteriestring 2** — Dietmars Nachfrage bei zwei
