@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.22.5 (2026-08-20)
+- Sicherheits-Hinweistext beim "🔄 Übernehmen erzwingen"-Button ergänzt
+  (CometWiFi-Anregung): stellt klar, dass EMS' `ApplyChanges()` keine
+  Befehle an Wechselrichter/Batterie sendet, nur den Tagesplan-Kalender
+  anlegt/repariert und den Timer neu setzt — und dass noch nicht
+  übernommene Formulareingaben dabei verloren gehen.
+
 ## 0.22.4 (2026-08-20)
 - **Neuer Button "🔄 Übernehmen erzwingen (ohne Formularänderung)"** —
   Dietmars Frage: wie löst man `ApplyChanges()` aus, ohne ein Formularfeld

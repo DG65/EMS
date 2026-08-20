@@ -1210,6 +1210,10 @@
             "onClick": "echo EMS_BuildDayPlan($id, true);"
         },
         {
+            "type": "Label",
+            "caption": "Ungefährlich: EMS' ApplyChanges() sendet keine Befehle an Wechselrichter/Batterie -- es legt nur den Tagesplan-Kalender an/repariert ihn (falls nötig) und setzt den Aktualisierungs-Timer neu. Wendet die GESPEICHERTEN Einstellungen an -- noch nicht übernommene Formulareingaben gehen dabei verloren."
+        },
+        {
             "type": "Button",
             "caption": "🔄 Übernehmen erzwingen (ohne Formularänderung)",
             "onClick": "IPS_ApplyChanges($id); echo '✅ ApplyChanges() ausgeführt.';"
