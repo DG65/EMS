@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.21.13 (2026-08-20)
+- **Fix: `ApplyChanges()` schlug fehl mit "'Day' außerhalb des gültigen
+  Bereichs"** — direkte Folge des 0.21.12-Fixes: `IPS_SetEventScheduleGroup()`
+  lief jetzt tatsächlich (vorher durch andere Bugs nie erreicht), deckte
+  dabei aber einen weiteren, alten Fehler auf. `$Days` ist laut Symcon-Doku
+  eine 7-Bit-Wochentagsmaske (Bit0=Montag…Bit6=Sonntag, gültiger Bereich
+  0–127), der Code übergab aber `65535` (16 Bit) für "alle Wochentage" —
+  offenbar nie zuvor tatsächlich ausgeführt, sonst wäre das schon früher
+  aufgefallen. Korrigiert auf `127` (alle 7 Bits gesetzt).
+
 ## 0.21.12 (2026-08-20)
 - **Dritter, eigentlicher Grund für den leeren Tagesplan gefunden: die
   Wochenplan-Gruppe wurde nie (neu) angelegt.** Dank der in 0.21.10

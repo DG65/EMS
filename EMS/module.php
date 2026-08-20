@@ -2130,8 +2130,13 @@ class EMS extends IPSModule
         // jedem Aufruf neu gesetzt -- heilt einen kaputten Bestands-Event
         // automatisch beim naechsten ApplyChanges(), ohne dass der Event
         // manuell geloescht werden muss.
-        // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter Wochenrhythmus:
-        IPS_SetEventScheduleGroup($eventId, 0, 65535);
+        // alle Wochentage -- Inhalt wird taeglich neu geschrieben, kein echter
+        // Wochenrhythmus. Live-Fund 20.08.2026: $Days ist eine 7-Bit-Maske
+        // (Bit0=Montag..Bit6=Sonntag, gueltiger Bereich 0-127), NICHT der
+        // vorher angenommene 16-Bit-Wert 65535 -- IPS quittierte das beim
+        // naechsten ApplyChanges() mit "'Day' ausserhalb des gueltigen
+        // Bereichs". 127 = alle 7 Bits gesetzt = alle Wochentage.
+        IPS_SetEventScheduleGroup($eventId, 0, 127);
 
         // 5. Parameter ist Pflicht (ScriptContent) -- leer, weil dieser Event
         // NUR zur Anzeige dient. Wuerde hier echter Code stehen, haette IPS'
