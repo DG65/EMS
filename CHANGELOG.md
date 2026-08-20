@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.5 (2026-08-20)
+- **"🔗 Verbund-Status"-Panel neu aufgebaut** — Dietmar gefiel der bisherige
+  technische Fließtext ("NRG-Stack Partnermodule: InverterHub=1 MeterHub=1
+  ...") sichtbar am wenigsten im Vergleich zu einer knapperen Anzeige, die
+  er in einem anderen Modul gesehen hat. Neue Kopfzeile im Muster
+  `✅ N Partnermodul-Instanz(en) gefunden (zuletzt HH:MM:SS Uhr).` direkt
+  unter dem "🔎 Jetzt neu suchen"-Button (vorher: Button nach dem Text, jetzt
+  davor). Die technische Detailaufschlüsselung je Partnermodul-Typ bleibt
+  erhalten, wandert aber in ein eingeklapptes Unter-Panel.
+  Neues Attribut `LastDiscoveryTs`, bei jeder `Discover()`-Ausführung
+  aktualisiert. Neue verbundweite SUITE.md-Konvention "Einheitliche
+  Verbund-Status-Kopfzeile" — betrifft jedes Modul mit einer eigenen
+  Geräte-/Partnersuche, nicht nur EMS.
+
 ## 0.21.4 (2026-08-20)
 - **Status-Zeile jetzt wirklich JE FELD statt Pauschalhinweis** — Dietmars
   Präzisierung: nicht "schau oben im Verbund-Status-Panel nach", sondern

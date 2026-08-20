@@ -276,6 +276,7 @@ class EMS extends IPSModule
         $this->RegisterAttributeInteger('LastDecision',      0);
         $this->RegisterAttributeInteger('ConsecutiveErrors', 0);
         $this->RegisterAttributeInteger('BatteryBoostUntil', 0);
+        $this->RegisterAttributeInteger('LastDiscoveryTs',   0);
 
         // ── Tagesplan (siehe BuildDayPlan()/ensureDayPlanEvent()) ────
         $this->RegisterAttributeString('DayPlan',          '[]');
@@ -375,21 +376,32 @@ class EMS extends IPSModule
             'expanded' => true,
             'items'    => array(
                 array(
-                    'type'    => 'Label',
-                    'caption' => 'NRG-Stack Partnermodule: ' . $this->GetValue('EMS_Partners')
-                ),
-                array(
-                    'type'    => 'Label',
-                    'caption' => 'Verbund-Gesundheit: ' . $this->GetValue('EMS_FederationHealth')
-                ),
-                array(
                     'type'    => 'Button',
                     'caption' => '🔎 Jetzt neu suchen',
                     'onClick' => 'EMS_Discover($id);'
                 ),
                 array(
                     'type'    => 'Label',
+                    'caption' => $this->getDiscoverySummaryLine(),
+                ),
+                array(
+                    'type'    => 'Label',
+                    'caption' => 'Verbund-Gesundheit: ' . $this->GetValue('EMS_FederationHealth')
+                ),
+                array(
+                    'type'    => 'Label',
                     'caption' => $this->getBoostStatusLine(),
+                ),
+                array(
+                    'type'    => 'ExpansionPanel',
+                    'caption' => 'Details je Partnermodul-Typ',
+                    'expanded' => false,
+                    'items'   => array(
+                        array(
+                            'type'    => 'Label',
+                            'caption' => 'NRG-Stack Partnermodule: ' . $this->GetValue('EMS_Partners')
+                        ),
+                    )
                 ),
             )
         ));
@@ -702,6 +714,7 @@ class EMS extends IPSModule
         $this->WriteAttributeString('UnresponsiveInstances', json_encode($unresponsive));
 
         $this->WriteAttributeString('PartnerCache', json_encode($partners));
+        $this->WriteAttributeInteger('LastDiscoveryTs', time());
 
         $summary = sprintf(
             'InverterHub=%d MeterHub=%d ChargerHub=%d HeishaMon=%d Tessie=%d Tibber=%d',
@@ -1336,6 +1349,33 @@ class EMS extends IPSModule
             return array('type' => 'Label', 'caption' => $textOrArray['caption'], 'color' => $textOrArray['color']);
         }
         return array('type' => 'Label', 'caption' => $textOrArray);
+    }
+
+    /**
+     * Prominente Kopfzeile fuers "Verbund-Status"-Panel, im Stil einer
+     * anderen NRG-Stack-Geraetesuche, die Dietmar besser gefallen hat als
+     * EMS' bisheriger technischer Fliesstext (20.08.2026, Screenshot-Vorbild:
+     * "✅ 12 Geräte gefunden (zuletzt 16:25:41 Uhr).") -- grosses Icon,
+     * eine Kernzahl, Zeitstempel der letzten Suche, kein Aufzaehlungssatz.
+     * Der bisherige technische Fliesstext (EMS_Partners, je Partnermodul-Typ
+     * mit Zahl) bleibt als zweite, kleinere Zeile fuer Diagnosezwecke
+     * erhalten -- nur nicht mehr als Kopfzeile. Referenz fuer die neue
+     * Verbund-Konvention "Einheitliche Verbund-Status-Kopfzeile", siehe
+     * SUITE.md.
+     */
+    private function getDiscoverySummaryLine()
+    {
+        $ts = $this->ReadAttributeInteger('LastDiscoveryTs');
+        if ($ts === 0) {
+            return 'ℹ️ Noch nicht gesucht — Button unten drücken.';
+        }
+        $partners = json_decode($this->ReadAttributeString('PartnerCache'), true) ?: array();
+        $count = 0;
+        foreach ($partners as $list) {
+            $count += is_array($list) ? count($list) : 0;
+        }
+        $icon = $count > 0 ? '✅' : '⚠️';
+        return sprintf('%s %d Partnermodul-Instanz(en) gefunden (zuletzt %s Uhr).', $icon, $count, date('H:i:s', $ts));
     }
 
     private function getBatterySocStatusLine()
