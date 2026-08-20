@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.22.1 (2026-08-20)
+- **Fix nach Rückmeldung von Tibber Grid Reward: kein Tages-Offset-Parameter,
+  falsches Zeitfeld angenommen.** `TIBBERGR_GetPriceCurve()` nimmt KEIN
+  zweites Argument (PHP ignoriert überzählige Parameter stillschweigend —
+  hätte für "morgen" unbemerkt immer denselben kombinierten Satz geliefert)
+  und liefert immer heute+morgen in einer nach `start` sortierten Liste.
+  Neue `getTibberCombinedCurveJson()` ruft die Kurve jetzt korrekt ohne
+  Offset ab. `parsePT15M()` erkennt jetzt zusätzlich das echte Tibber-
+  Grid-Reward-Feldformat (`start` als Unix-Timestamp, `price`) — vorher
+  wurde nur `startsAt` (ISO-String) erkannt, das echte Feld hieß aber
+  `start`, wäre also nie erfolgreich geparst worden (fataler
+  Stille-Fehlschlag: hätte auf die falsche Positions-Fallback-Zuordnung
+  zurückfallen können). `startsAt`/`total` bleiben als Fallback für andere
+  Preisquellen bestehen.
+
 ## 0.22.0 (2026-08-20)
 - **Neu: `EMS_GetDayPlan()` — öffentlicher Abruf für Dashboard-Visualisierung**
   (Dietmars Wunsch: "die Planung im Dashboard sehen, zusammen mit SOC und

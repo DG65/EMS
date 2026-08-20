@@ -1341,17 +1341,18 @@ class EMS extends IPSModule
     }
 
     /**
-     * Liefert die heutigen PT15M-Preise als JSON, fuer BuildDayPlan().
-     * Bevorzugt: automatisch ueber TIBBERGR_GetPriceCurve() von der schon
-     * durch Discover() gefundenen Tibber-Grid-Reward-Instanz -- das ist der
-     * gleiche Automatik-Anspruch, den EMS fuer Batterie/PV via InverterHub
-     * schon einloest (20.08.2026, Dietmars berechtigter Einwand: "warum ein
-     * Verbund, wenn ich Luecken selbst manuell verknuepfen muss"). Fällt nur
-     * zurueck auf die manuelle Property VAR_TIB_PT15M_Today, wenn keine
-     * Tibber-Grid-Reward-Instanz installiert ist oder der Aufruf nichts
-     * Brauchbares liefert (z.B. andere Tibber-Anbindung, eigene Quelle).
+     * Liefert die kombinierte Tibber-Preiskurve (heute+morgen, sobald von
+     * Tibber veroeffentlicht) als JSON, EINMAL abgerufen -- korrigiert
+     * 20.08.2026 nach Rueckmeldung von Tibber Grid Reward: es gibt KEINEN
+     * Tages-Offset-Parameter (anders als urspruenglich angenommen);
+     * `TIBBERGR_GetPriceCurve($id)` liefert immer schon beide Tage in einer
+     * nach `start` sortierten Liste, ein zweites Argument wuerde von PHP
+     * einfach stillschweigend ignoriert (kein Fehler, aber wirkungslos --
+     * haette unbemerkt IMMER denselben kombinierten Satz zurueckgeliefert,
+     * unabhaengig vom angeblichen Offset). parsePT15M() filtert die
+     * kombinierte Liste anschliessend selbst nach Kalendertag.
      */
-    private function getPT15MTodayJson()
+    private function getTibberCombinedCurveJson()
     {
         $tibberId = $this->getTibberGridRewardInstance();
         if ($tibberId > 0) {
@@ -1361,9 +1362,27 @@ class EMS extends IPSModule
                     return json_encode($curve);
                 }
             } catch (Throwable $e) {
-                $this->emsLog(EMS_LOG_BASIC, 'TIBBERGR_GetPriceCurve fehlgeschlagen, falle auf manuelle Verknuepfung zurueck: ' . $e->getMessage());
+                $this->emsLog(EMS_LOG_BASIC, 'TIBBERGR_GetPriceCurve fehlgeschlagen: ' . $e->getMessage());
             }
         }
+        return '';
+    }
+
+    /**
+     * Liefert die heutigen PT15M-Preise als JSON, fuer BuildDayPlan().
+     * Bevorzugt: automatisch ueber die kombinierte Tibber-Grid-Reward-Kurve
+     * (siehe getTibberCombinedCurveJson()) -- das ist der gleiche Automatik-
+     * Anspruch, den EMS fuer Batterie/PV via InverterHub schon einloest
+     * (20.08.2026, Dietmars berechtigter Einwand: "warum ein Verbund, wenn
+     * ich Luecken selbst manuell verknuepfen muss"). Faellt nur zurueck auf
+     * die manuelle Property VAR_TIB_PT15M_Today, wenn keine Tibber-Grid-
+     * Reward-Instanz installiert ist oder der Aufruf nichts Brauchbares
+     * liefert (z.B. andere Tibber-Anbindung, eigene Quelle).
+     */
+    private function getPT15MTodayJson()
+    {
+        $combined = $this->getTibberCombinedCurveJson();
+        if (!empty($combined)) { return $combined; }
         return (string)$this->readVar('VAR_TIB_PT15M_Today', '');
     }
 
@@ -1403,27 +1422,19 @@ class EMS extends IPSModule
 
     /**
      * Liefert die morgigen PT15M-Preise als JSON, analog getPT15MTodayJson()
-     * (20.08.2026, fuer die erweiterte Zwei-Tage-Planung). Versucht zuerst
-     * automatisch ueber TIBBERGR_GetPriceCurve($id, 1) -- ob der zweite
-     * Parameter (Tages-Offset) von Tibber Grid Reward unterstuetzt wird, ist
-     * NICHT verifiziert (kein Live-Zugriff auf deren Quellcode von hier aus)
-     * -- daher defensiv mit Throwable abgesichert. Faellt bei fehlendem
+     * (20.08.2026, fuer die erweiterte Zwei-Tage-Planung). Nutzt dieselbe
+     * kombinierte Kurve wie "heute" (ein Aufruf deckt beide Tage ab, siehe
+     * getTibberCombinedCurveJson()) -- parsePT15M() filtert anschliessend
+     * selbst nach Kalendertag (Tages-Offset-Parameter). Faellt bei fehlendem
      * Erfolg auf die manuelle Fallback-Property VAR_TIB_PT15M_Tomorrow
-     * zurueck (bereits im Formular vorhanden).
+     * zurueck (bereits im Formular vorhanden). Morgen-Preise sind i. d. R.
+     * erst ab ca. 13-14 Uhr von Tibber veroeffentlicht -- vorher liefert
+     * parsePT15M() fuer alle Slots `null` (korrekt: "keine Daten").
      */
     private function getPT15MTomorrowJson()
     {
-        $tibberId = $this->getTibberGridRewardInstance();
-        if ($tibberId > 0) {
-            try {
-                $curve = TIBBERGR_GetPriceCurve($tibberId, 1);
-                if (is_array($curve) && !empty($curve)) {
-                    return json_encode($curve);
-                }
-            } catch (Throwable $e) {
-                $this->emsLog(EMS_LOG_BASIC, 'TIBBERGR_GetPriceCurve(Tag+1) fehlgeschlagen, falle auf manuelle Verknuepfung zurueck: ' . $e->getMessage());
-            }
-        }
+        $combined = $this->getTibberCombinedCurveJson();
+        if (!empty($combined)) { return $combined; }
         return (string)$this->readVar('VAR_TIB_PT15M_Tomorrow', '');
     }
 
@@ -2382,16 +2393,26 @@ class EMS extends IPSModule
         }
 
         $targetDate = date('Y-m-d', strtotime($dayOffset === 0 ? 'today' : "today +{$dayOffset} day"));
-        // Format: Objekt-Array mit "total" + "startsAt"
+        // Format: Objekt-Array mit Preis- + Zeitfeld. Unterstuetzt beide
+        // bekannten Formen: Tibber Grid Reward liefert `start` als Unix-
+        // Timestamp (int) + `price` (contractVersion 1.1, verifiziert
+        // 20.08.2026) -- `startsAt` als ISO-String + `total` bleibt als
+        // Fallback fuer andere/manuell eingetragene Preisquellen bestehen.
         foreach ($data as $i => $entry) {
             if (!is_array($entry)) { continue; }
             $price = null;
-            if (isset($entry['total']))  { $price = (float)$entry['total']; }
-            elseif (isset($entry['price'])) { $price = (float)$entry['price']; }
+            if (isset($entry['price']))  { $price = (float)$entry['price']; }
+            elseif (isset($entry['total'])) { $price = (float)$entry['total']; }
             if ($price === null) { continue; }
 
-            if (isset($entry['startsAt'])) {
+            $ts = null;
+            if (isset($entry['start']) && is_numeric($entry['start'])) {
+                $ts = (int)$entry['start'];
+            } elseif (isset($entry['startsAt'])) {
                 $ts = strtotime($entry['startsAt']);
+            }
+
+            if ($ts !== null) {
                 if (date('Y-m-d', $ts) !== $targetDate) { continue; } // gehoert zu einem anderen Kalendertag
                 $slot = (int)floor(((int)date('H', $ts) * 60 + (int)date('i', $ts)) / 15);
                 if ($slot >= 0 && $slot < 96) {
