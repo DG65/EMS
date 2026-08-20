@@ -280,6 +280,7 @@ class EMS extends IPSModule
 
         // ── Tagesplan (siehe BuildDayPlan()/ensureDayPlanEvent()) ────
         $this->RegisterAttributeString('DayPlan',          '[]');
+        $this->RegisterAttributeString('DayPlanTomorrow',  '[]');
         $this->RegisterAttributeString('DayPlanSignature', '');
         $this->RegisterAttributeInteger('DayPlanEventId',  0);
 
@@ -1401,6 +1402,170 @@ class EMS extends IPSModule
     }
 
     /**
+     * Liefert die morgigen PT15M-Preise als JSON, analog getPT15MTodayJson()
+     * (20.08.2026, fuer die erweiterte Zwei-Tage-Planung). Versucht zuerst
+     * automatisch ueber TIBBERGR_GetPriceCurve($id, 1) -- ob der zweite
+     * Parameter (Tages-Offset) von Tibber Grid Reward unterstuetzt wird, ist
+     * NICHT verifiziert (kein Live-Zugriff auf deren Quellcode von hier aus)
+     * -- daher defensiv mit Throwable abgesichert. Faellt bei fehlendem
+     * Erfolg auf die manuelle Fallback-Property VAR_TIB_PT15M_Tomorrow
+     * zurueck (bereits im Formular vorhanden).
+     */
+    private function getPT15MTomorrowJson()
+    {
+        $tibberId = $this->getTibberGridRewardInstance();
+        if ($tibberId > 0) {
+            try {
+                $curve = TIBBERGR_GetPriceCurve($tibberId, 1);
+                if (is_array($curve) && !empty($curve)) {
+                    return json_encode($curve);
+                }
+            } catch (Throwable $e) {
+                $this->emsLog(EMS_LOG_BASIC, 'TIBBERGR_GetPriceCurve(Tag+1) fehlgeschlagen, falle auf manuelle Verknuepfung zurueck: ' . $e->getMessage());
+            }
+        }
+        return (string)$this->readVar('VAR_TIB_PT15M_Tomorrow', '');
+    }
+
+    /**
+     * Kernentscheidung fuer EINEN Viertelstunden-Slot -- ausgelagert aus
+     * BuildDayPlan() (20.08.2026), damit dieselbe Logik unveraendert sowohl
+     * fuer HEUTE (ab dem aktuellen Slot) als auch fuer die erweiterte
+     * MORGEN-Planung (Dashboard-Visualisierung, siehe SUITE.md) wiederverwendet
+     * werden kann, ohne den Entscheidungscode zu duplizieren. $price darf
+     * `null` sein (keine Daten -- siehe SUITE.md Stolperfalle 15), dann wird
+     * IMMER Automatik geplant. $ctx buendelt alle Konfigurationswerte, die
+     * fuer jeden Slot gleich bleiben (siehe Aufrufer fuer den Aufbau).
+     * Liefert ['plan' => [...], 'soc' => $neuerSoc].
+     */
+    private function simulateDaySlot($slot, $price, $pvW, $soc, array $cheapRank, array $ctx)
+    {
+        $hourOfSlot = (int)($slot / 4);
+
+        if ($ctx['enwgActive'] && $this->slotInEnwgWindow($hourOfSlot, $ctx['enwgStartH'], $ctx['enwgEndH'])) {
+            // §14a wird zur Laufzeit reaktiv erzwungen (optimize()-Branch
+            // 1, Netzbetreiber-Pflicht, kein Preis-Vorschlag) -- hier nur
+            // informativ, damit die Plan-Anzeige nicht widerspricht.
+            $missingKwh = max(0.0, ($ctx['socTargetNight'] - $soc) / 100.0 * $ctx['capKwh']);
+            $soc = min(100.0, $soc + (min($missingKwh, $ctx['chargeKw'] * 0.25) / max(0.001, $ctx['capKwh']) * 100.0));
+            return array('plan' => array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$ctx['maxW'],
+                'reason' => '§14a-Fenster (Vorrang vor Plan)', 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        $loadW    = $ctx['avgHouseW'];
+        $surplusW = $pvW - $loadW;
+
+        if ($price !== null && $price < 0 && $soc < 99.5) {
+            // Negativpreis: immer laden, man wird dafuer bezahlt -- ersetzt
+            // die alte separate PlanNegativePriceExport()-Funktion, ist
+            // jetzt einfach eine weitere Regel im selben Tagesplan.
+            $missingKwh = max(0.0, (100.0 - $soc) / 100.0 * $ctx['capKwh']);
+            $soc = min(100.0, $soc + (min($missingKwh, $ctx['chargeKw'] * 0.25) / max(0.001, $ctx['capKwh']) * 100.0));
+            return array('plan' => array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$ctx['maxW'],
+                'reason' => sprintf('Negativpreis %.2fct -- immer laden', $price * 100), 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        if ($surplusW > $ctx['fcMinPower']) {
+            if ($soc < ($ctx['socTargetDay'] - $ctx['hystSoc'])) {
+                $gainKwh = $surplusW / 1000.0 * 0.25;
+                $soc = min(100.0, $soc + ($gainKwh / max(0.001, $ctx['capKwh']) * 100.0));
+                return array('plan' => array('op' => EMS_OP_PV_SELFUSE, 'gw' => GW_MODE_CHARGE_PV, 'power' => 0,
+                    'reason' => sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%)', $surplusW, $ctx['socTargetDay']),
+                    'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+            }
+            return array('plan' => array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => (int)$pvW,
+                'reason' => sprintf('Akku am Ziel (SOC=%.0f%%), PV-Vollernte %.0fW exportieren', $soc, $pvW),
+                'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        // Keine Preisdaten fuer diesen Slot -- ab hier braucht JEDE
+        // Entscheidung einen echten Preis (Negativpreis-/Export-/
+        // Ladeschwellen). Live-Fund 20.08.2026: frueher fuellte
+        // parsePT15M() fehlende Slots mit 0.0 -- das wurde hier als
+        // "Bezug 0ct, guenstiger als jede Einspeiseverguetung"
+        // fehlinterpretiert und plante faelschlich "Export" fuer
+        // Abendstunden ohne Tibber-Daten. Ohne echten Preis ist Automatik
+        // die einzig ehrliche Entscheidung -- der WR entscheidet dann
+        // selbst, kein geratener Preis-Vorschlag.
+        if ($price === null) {
+            return array('plan' => array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0,
+                'reason' => 'Keine Preisdaten fuer diesen Slot -- Automatik', 'price' => null, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        // Kein PV-Ueberschuss -- Batterie vs. Netz.
+        if ($ctx['feedTariff'] > ($price + 0.001) && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
+            // Bezug ist JETZT billiger als die Einspeiseverguetung -- die
+            // gespeicherte Energie ist mehr wert, wenn sie exportiert
+            // wird, als wenn sie den (billigeren) Netzbezug ersetzt.
+            // Hausverbrauch wird stattdessen guenstig aus dem Netz
+            // gedeckt (Dietmars Vorgabe, 19.08.2026 -- typischer
+            // Mittags-Fall bei niedrigen Spotpreisen).
+            $lossKwh = $loadW / 1000.0 * 0.25;
+            $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
+            return array('plan' => array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
+                'reason' => sprintf('Bezug %.2fct < Einspeiseverguetung %.2fct -- Batterie exportiert, Haus aus Netz', $price * 100, $ctx['feedTariff'] * 100),
+                'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        $missingKwh  = max(0.0, ($ctx['socTargetNight'] - $soc) / 100.0 * $ctx['capKwh']);
+        $neededSlots = ($ctx['chargeKw'] > 0) ? (int)ceil($missingKwh / ($ctx['chargeKw'] * 0.25)) : 0;
+        $rank        = $cheapRank[$slot] ?? PHP_INT_MAX;
+        if ($neededSlots > 0 && $rank < $neededSlots && $price < ($ctx['thCharge'] + 0.05)) {
+            $soc = min(100.0, $soc + (min($missingKwh, $ctx['chargeKw'] * 0.25) / max(0.001, $ctx['capKwh']) * 100.0));
+            return array('plan' => array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$ctx['maxW'],
+                'reason' => sprintf('Rang %d der guenstigsten Slots (%.2fct), Nachtziel %.0f%% noch offen', $rank + 1, $price * 100, $ctx['socTargetNight']),
+                'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        if ($price > $ctx['thExport'] && $price > $ctx['feedTariff'] && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
+            $lossKwh = $loadW / 1000.0 * 0.25;
+            $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
+            return array('plan' => array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
+                'reason' => sprintf('Export: %.2fct > Einspeiseverguetung %.2fct', $price * 100, $ctx['feedTariff'] * 100),
+                'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        if ($price > $ctx['thDischarge'] && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
+            $lossKwh = $loadW / 1000.0 * 0.25;
+            $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
+            return array('plan' => array('op' => EMS_OP_DISCHARGE, 'gw' => GW_MODE_DISCHARGE, 'power' => 0,
+                'reason' => sprintf('Bezug %.2fct teuer -- Eigenverbrauch aus Batterie', $price * 100),
+                'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+        }
+
+        return array('plan' => array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0,
+            'reason' => sprintf('Automatik: Bezug %.2fct guenstiger als Alternative', $price * 100),
+            'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+    }
+
+    /**
+     * Oeffentlicher Abruf fuer Partnermodule (20.08.2026, Dietmars Wunsch:
+     * "Planung im Dashboard sehen, zusammen mit SOC und Preis"). Liefert
+     * heute (ab jetzt) + morgen als EINE zusammenhaengende Liste, je Slot
+     * mit Uhrzeit, Entscheidung, Preis und simuliertem SOC -- fuer eine
+     * externe Visualisierung (z. B. Dashboard-Diagramm), NICHT fuer den
+     * nativen IPS-Kalender (der bleibt architektonisch auf einen Tag
+     * begrenzt, siehe SUITE.md). contractVersion 1.0, additiv erweiterbar.
+     */
+    public function GetDayPlan()
+    {
+        $today    = json_decode($this->ReadAttributeString('DayPlan'), true) ?: array();
+        $tomorrow = json_decode($this->ReadAttributeString('DayPlanTomorrow'), true) ?: array();
+        $out = array();
+        $baseToday    = strtotime('today');
+        $baseTomorrow = strtotime('tomorrow');
+        foreach ($today as $slot => $entry) {
+            $entry['time'] = $baseToday + $slot * 900;
+            $out[] = $entry;
+        }
+        foreach ($tomorrow as $slot => $entry) {
+            $entry['time'] = $baseTomorrow + $slot * 900;
+            $out[] = $entry;
+        }
+        return array('contractVersion' => '1.0', 'slots' => $out);
+    }
+
+    /**
      * Status-Zeile fuer das Bat1-SOC-Fallback-Feld — mit roter Pflichtfeld-
      * Kennzeichnung, wenn das Feld wirklich unabdingbar ist (Dietmars
      * Praezisierung 20.08.2026: nicht nur "nicht automatisch verbunden"
@@ -1924,117 +2089,61 @@ class EMS extends IPSModule
         $nowSlot  = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
         $chargeKw = min($maxW / 1000.0, $capKwh * 0.5); // wie bisher: Ladegeschwindigkeit aus Leistungsgrenze/0.5C geschaetzt
 
+        $ctx = array(
+            'enwgActive' => $enwgActive, 'enwgStartH' => $enwgStartH, 'enwgEndH' => $enwgEndH,
+            'avgHouseW' => $avgHouseW, 'fcMinPower' => $fcMinPower,
+            'socTargetDay' => $socTargetDay, 'hystSoc' => $hystSoc,
+            'socMin' => $socMin, 'socReserve' => $socReserve, 'socTargetNight' => $socTargetNight,
+            'capKwh' => $capKwh, 'chargeKw' => $chargeKw, 'maxW' => $maxW,
+            'feedTariff' => $feedTariff, 'thCharge' => $thCharge, 'thExport' => $thExport, 'thDischarge' => $thDischarge,
+        );
+
         $plan = array();
         for ($slot = 0; $slot < 96; $slot++) {
             if ($slot < $nowSlot) {
-                $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0, 'reason' => '(vergangen)');
+                $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0, 'reason' => '(vergangen)',
+                    'price' => $prices[$slot], 'soc' => round($soc, 1));
                 continue;
             }
-
-            $price      = $prices[$slot];
-            $pvW        = (float)($pvfSlots[$slot] ?? 0.0);
-            $hourOfSlot = (int)($slot / 4);
-
-            if ($enwgActive && $this->slotInEnwgWindow($hourOfSlot, $enwgStartH, $enwgEndH)) {
-                // §14a wird zur Laufzeit reaktiv erzwungen (optimize()-Branch
-                // 1, Netzbetreiber-Pflicht, kein Preis-Vorschlag) -- hier nur
-                // informativ, damit die Plan-Anzeige nicht widerspricht.
-                $plan[$slot] = array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$maxW,
-                    'reason' => '§14a-Fenster (Vorrang vor Plan)');
-                $missingKwh = max(0.0, ($socTargetNight - $soc) / 100.0 * $capKwh);
-                $soc = min(100.0, $soc + (min($missingKwh, $chargeKw * 0.25) / max(0.001, $capKwh) * 100.0));
-                continue;
-            }
-
-            $loadW    = $avgHouseW;
-            $surplusW = $pvW - $loadW;
-
-            if ($price < 0 && $soc < 99.5) {
-                // Negativpreis: immer laden, man wird dafuer bezahlt -- ersetzt
-                // die alte separate PlanNegativePriceExport()-Funktion, ist
-                // jetzt einfach eine weitere Regel im selben Tagesplan.
-                $plan[$slot] = array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$maxW,
-                    'reason' => sprintf('Negativpreis %.2fct -- immer laden', $price * 100));
-                $missingKwh = max(0.0, (100.0 - $soc) / 100.0 * $capKwh);
-                $soc = min(100.0, $soc + (min($missingKwh, $chargeKw * 0.25) / max(0.001, $capKwh) * 100.0));
-                continue;
-            }
-
-            if ($surplusW > $fcMinPower) {
-                if ($soc < ($socTargetDay - $hystSoc)) {
-                    $plan[$slot] = array('op' => EMS_OP_PV_SELFUSE, 'gw' => GW_MODE_CHARGE_PV, 'power' => 0,
-                        'reason' => sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%)', $surplusW, $socTargetDay));
-                    $gainKwh = $surplusW / 1000.0 * 0.25;
-                    $soc = min(100.0, $soc + ($gainKwh / max(0.001, $capKwh) * 100.0));
-                    continue;
-                }
-                $plan[$slot] = array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => (int)$pvW,
-                    'reason' => sprintf('Akku am Ziel (SOC=%.0f%%), PV-Vollernte %.0fW exportieren', $soc, $pvW));
-                continue;
-            }
-
-            // Keine Preisdaten fuer diesen Slot -- ab hier braucht JEDE
-            // Entscheidung einen echten Preis (Negativpreis-/Export-/
-            // Ladeschwellen). Live-Fund 20.08.2026: frueher fuellte
-            // parsePT15M() fehlende Slots mit 0.0 -- das wurde hier als
-            // "Bezug 0ct, guenstiger als jede Einspeiseverguetung"
-            // fehlinterpretiert und plante faelschlich "Export" fuer
-            // Abendstunden ohne Tibber-Daten. Ohne echten Preis ist Automatik
-            // die einzig ehrliche Entscheidung -- der WR entscheidet dann
-            // selbst, kein geratener Preis-Vorschlag.
-            if ($price === null) {
-                $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0,
-                    'reason' => 'Keine Preisdaten fuer diesen Slot -- Automatik');
-                continue;
-            }
-
-            // Kein PV-Ueberschuss -- Batterie vs. Netz.
-            if ($feedTariff > ($price + 0.001) && $soc > ($socMin + $socReserve + $hystSoc)) {
-                // Bezug ist JETZT billiger als die Einspeiseverguetung -- die
-                // gespeicherte Energie ist mehr wert, wenn sie exportiert
-                // wird, als wenn sie den (billigeren) Netzbezug ersetzt.
-                // Hausverbrauch wird stattdessen guenstig aus dem Netz
-                // gedeckt (Dietmars Vorgabe, 19.08.2026 -- typischer
-                // Mittags-Fall bei niedrigen Spotpreisen).
-                $plan[$slot] = array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
-                    'reason' => sprintf('Bezug %.2fct < Einspeiseverguetung %.2fct -- Batterie exportiert, Haus aus Netz', $price * 100, $feedTariff * 100));
-                $lossKwh = $loadW / 1000.0 * 0.25;
-                $soc = max(0.0, $soc - ($lossKwh / max(0.001, $capKwh) * 100.0));
-                continue;
-            }
-
-            $missingKwh  = max(0.0, ($socTargetNight - $soc) / 100.0 * $capKwh);
-            $neededSlots = ($chargeKw > 0) ? (int)ceil($missingKwh / ($chargeKw * 0.25)) : 0;
-            if ($neededSlots > 0 && $cheapRank[$slot] < $neededSlots && $price < ($thCharge + 0.05)) {
-                $plan[$slot] = array('op' => EMS_OP_NET_CHARGE, 'gw' => GW_MODE_AC_IMPORT, 'power' => (int)$maxW,
-                    'reason' => sprintf('Rang %d der guenstigsten Slots (%.2fct), Nachtziel %.0f%% noch offen', $cheapRank[$slot] + 1, $price * 100, $socTargetNight));
-                $soc = min(100.0, $soc + (min($missingKwh, $chargeKw * 0.25) / max(0.001, $capKwh) * 100.0));
-                continue;
-            }
-
-            if ($price > $thExport && $price > $feedTariff && $soc > ($socMin + $socReserve + $hystSoc)) {
-                $plan[$slot] = array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
-                    'reason' => sprintf('Export: %.2fct > Einspeiseverguetung %.2fct', $price * 100, $feedTariff * 100));
-                $lossKwh = $loadW / 1000.0 * 0.25;
-                $soc = max(0.0, $soc - ($lossKwh / max(0.001, $capKwh) * 100.0));
-                continue;
-            }
-
-            if ($price > $thDischarge && $soc > ($socMin + $socReserve + $hystSoc)) {
-                $plan[$slot] = array('op' => EMS_OP_DISCHARGE, 'gw' => GW_MODE_DISCHARGE, 'power' => 0,
-                    'reason' => sprintf('Bezug %.2fct teuer -- Eigenverbrauch aus Batterie', $price * 100));
-                $lossKwh = $loadW / 1000.0 * 0.25;
-                $soc = max(0.0, $soc - ($lossKwh / max(0.001, $capKwh) * 100.0));
-                continue;
-            }
-
-            $plan[$slot] = array('op' => EMS_OP_AUTO, 'gw' => GW_MODE_AUTO, 'power' => 0,
-                'reason' => sprintf('Automatik: Bezug %.2fct guenstiger als Alternative', $price * 100));
+            $price = $prices[$slot];
+            $pvW   = (float)($pvfSlots[$slot] ?? 0.0);
+            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $cheapRank, $ctx);
+            $plan[$slot] = $result['plan'];
+            $soc = $result['soc'];
         }
 
         $this->WriteAttributeString('DayPlan', json_encode($plan));
         $this->WriteAttributeString('DayPlanSignature', $signature);
         $this->emsLog(EMS_LOG_BASIC, sprintf('Tagesplan neu berechnet (ab Slot %d/96, Preis-Signatur %s)', $nowSlot, substr(md5($todayJson), 0, 8)));
+
+        // Erweiterte Planung fuer MORGEN (20.08.2026, Dietmars Wunsch: "im
+        // Dashboard zusammen mit SOC und Preis sehen -- auch morgen"). Der
+        // native IPS-Wochenplan-Kalender oben bleibt bewusst auf "heute"
+        // beschraenkt (er ist architektonisch ein einziges, taeglich
+        // wiederholtes 24h-Muster, keine echte Zwei-Tage-Zeitleiste -- siehe
+        // SUITE.md). Diese erweiterte Fassung ist NICHT fuer den Kalender
+        // gedacht, sondern fuer eine externe Visualisierung (Dashboard-
+        // Diagramm), die zwei Tage durchaus als eine Linie zeichnen kann.
+        // Nutzt dieselbe Entscheidungslogik wie oben (simulateDaySlot()),
+        // beginnt aber bei Slot 0 (nicht "vergangen") und fuehrt den am Ende
+        // von heute simulierten SOC nahtlos fort.
+        $tomorrowJson = $this->getPT15MTomorrowJson();
+        $tomorrowPrices = $this->parsePT15M($tomorrowJson, 1);
+        $tomorrowRanked = $tomorrowPrices;
+        asort($tomorrowRanked);
+        $tomorrowCheapRank = array();
+        $tr = 0;
+        foreach ($tomorrowRanked as $slotIdx => $p) { $tomorrowCheapRank[$slotIdx] = $tr++; }
+
+        $tomorrowPlan = array();
+        for ($slot = 0; $slot < 96; $slot++) {
+            $price = $tomorrowPrices[$slot];
+            $pvW   = (float)($pvfSlots[96 + $slot] ?? 0.0);
+            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $tomorrowCheapRank, $ctx);
+            $tomorrowPlan[$slot] = $result['plan'];
+            $soc = $result['soc'];
+        }
+        $this->WriteAttributeString('DayPlanTomorrow', json_encode($tomorrowPlan));
 
         $written = $this->writeDayPlanEvent($plan);
 
@@ -2255,7 +2364,7 @@ class EMS extends IPSModule
      * ueberschreibt (die Slot-Berechnung selbst kennt nur die Uhrzeit, nicht
      * das Datum).
      */
-    private function parsePT15M($json)
+    private function parsePT15M($json, int $dayOffset = 0)
     {
         $prices = array_fill(0, 96, null);
         if (empty($json)) { return $prices; }
@@ -2264,7 +2373,7 @@ class EMS extends IPSModule
         if (!is_array($data) || empty($data)) { return $prices; }
 
         // Format: einfaches Float-Array (kein Datumsbezug moeglich -- wird
-        // unveraendert positionsweise als "heute" uebernommen).
+        // unveraendert positionsweise als der Zieltag ($dayOffset) uebernommen).
         if (isset($data[0]) && is_numeric($data[0])) {
             for ($i = 0; $i < min(96, count($data)); $i++) {
                 $prices[$i] = (float)$data[$i];
@@ -2272,7 +2381,7 @@ class EMS extends IPSModule
             return $prices;
         }
 
-        $today = date('Y-m-d');
+        $targetDate = date('Y-m-d', strtotime($dayOffset === 0 ? 'today' : "today +{$dayOffset} day"));
         // Format: Objekt-Array mit "total" + "startsAt"
         foreach ($data as $i => $entry) {
             if (!is_array($entry)) { continue; }
@@ -2283,7 +2392,7 @@ class EMS extends IPSModule
 
             if (isset($entry['startsAt'])) {
                 $ts = strtotime($entry['startsAt']);
-                if (date('Y-m-d', $ts) !== $today) { continue; } // z.B. schon mitgelieferte Werte fuer morgen
+                if (date('Y-m-d', $ts) !== $targetDate) { continue; } // gehoert zu einem anderen Kalendertag
                 $slot = (int)floor(((int)date('H', $ts) * 60 + (int)date('i', $ts)) / 15);
                 if ($slot >= 0 && $slot < 96) {
                     $prices[$slot] = $price;

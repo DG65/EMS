@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.22.0 (2026-08-20)
+- **Neu: `EMS_GetDayPlan()` — öffentlicher Abruf für Dashboard-Visualisierung**
+  (Dietmars Wunsch: "die Planung im Dashboard sehen, zusammen mit SOC und
+  Preis"). Liefert heute (ab jetzt) + morgen als eine zusammenhängende Liste,
+  je Viertelstunden-Slot mit Uhrzeit, geplanter Aktion, Preis und simuliertem
+  SOC. `contractVersion` 1.0. Der native IPS-Wochenplan-Kalender bleibt
+  bewusst auf "heute" begrenzt (architektonische Grenze des Kalender-Typs,
+  siehe SUITE.md) — diese neue Schnittstelle ist für externe Visualisierung
+  gedacht, die zwei Tage als eine durchgehende Linie zeichnen kann.
+- Entscheidungslogik aus `BuildDayPlan()` in `simulateDaySlot()` ausgelagert,
+  damit dieselbe Logik unverändert für heute UND die neue Morgen-Planung
+  gilt (keine Code-Verdopplung, kein Risiko einer Logik-Abweichung zwischen
+  beiden Tagen).
+- Neue `getPT15MTomorrowJson()`: versucht automatisch
+  `TIBBERGR_GetPriceCurve($id, 1)` (Tages-Offset — noch nicht gegen die
+  echte Tibber-Grid-Reward-API verifiziert), fällt sonst auf die bereits
+  vorhandene manuelle Fallback-Property `VAR_TIB_PT15M_Tomorrow` zurück.
+- `parsePT15M()` jetzt mit optionalem Tages-Offset-Parameter, datumsbewusst
+  für beliebige Tage (nicht mehr nur "heute").
+
 ## 0.21.14 (2026-08-20)
 - **Fix: fehlende Preisdaten für einen Slot wurden als "0ct, extrem günstig"
   fehlinterpretiert und lösten fälschlich Export-Entscheidungen aus** —
