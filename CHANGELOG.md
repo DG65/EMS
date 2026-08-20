@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.22.2 (2026-08-20)
+- **Kritischer Fix: Einheiten-Verwechslung ct/kWh vs. €/kWh in allen
+  Preisvergleichen von `BuildDayPlan()`.** Aufgedeckt durch Dashboards
+  neues Tagesplan-Diagramm (0.22.0-Feature): Tooltip zeigte "Strompreis:
+  2848.00" statt eines plausiblen zweistelligen Cent-Betrags. Tibber Grid
+  Reward bestätigte: `price` wird bewusst in **ct/kWh** geliefert
+  (`round($total * 100, 2)`), während JEDE Preisschwelle in EMS selbst
+  (`TIB_Threshold_Charge/Export/Discharge`, `VAR_TIB_Feed_Tariff`) als
+  **€/kWh**-Dezimalzahl konfiguriert ist (z. B. 0.15, 0.1836). Ohne
+  Umrechnung war "Preis (28.48) > Exportschwelle (0.20)" praktisch IMMER
+  wahr — das erklärt die Dauer-Export-Planung an vielen echten
+  Preis-Slots grundlegender als der zuvor gefixte Fehler mit fehlenden
+  Slots (0.21.14, der betraf nur echte Datenlücken). `parsePT15M()`
+  rechnet das `price`-Feld jetzt beim Einlesen von ct/kWh auf €/kWh um
+  (÷100); das ältere `total`-Fallback-Format bleibt unverändert (war
+  schon €/kWh).
+
 ## 0.22.1 (2026-08-20)
 - **Fix nach Rückmeldung von Tibber Grid Reward: kein Tages-Offset-Parameter,
   falsches Zeitfeld angenommen.** `TIBBERGR_GetPriceCurve()` nimmt KEIN

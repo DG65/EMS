@@ -2398,11 +2398,24 @@ class EMS extends IPSModule
         // Timestamp (int) + `price` (contractVersion 1.1, verifiziert
         // 20.08.2026) -- `startsAt` als ISO-String + `total` bleibt als
         // Fallback fuer andere/manuell eingetragene Preisquellen bestehen.
+        //
+        // EINHEITEN-FIX 20.08.2026 (kritischer Live-Fund, Dashboard-
+        // Diagramm zeigte "Strompreis: 2848.00" statt ~28ct): Tibber Grid
+        // Reward liefert `price` explizit in CT/KWH (verifiziert durch deren
+        // eigenen Quellcode: 'price' => round($total * 100, 2)), waehrend
+        // JEDE Preisschwelle in EMS selbst (TIB_Threshold_Charge/Export/
+        // Discharge, VAR_TIB_Feed_Tariff) als EUR/KWH-Dezimalzahl konfiguriert
+        // ist (z.B. 0.15, 0.1836). Ohne Umrechnung war der Vergleich "Preis
+        // (28.48) > Exportschwelle (0.20)" praktisch IMMER wahr, sobald echte
+        // Tibber-Daten durchkamen -- das erklaert die Dauer-Export-Planung
+        // grundlegender als nur die zuvor gefixten fehlenden Slots (0.21.14).
+        // `total` (Alt-/Fallback-Format) bleibt unveraendert EUR/KWH, wird
+        // NICHT durch 100 geteilt.
         foreach ($data as $i => $entry) {
             if (!is_array($entry)) { continue; }
             $price = null;
-            if (isset($entry['price']))  { $price = (float)$entry['price']; }
-            elseif (isset($entry['total'])) { $price = (float)$entry['total']; }
+            if (isset($entry['price']))  { $price = (float)$entry['price'] / 100.0; } // ct/kWh -> EUR/kWh
+            elseif (isset($entry['total'])) { $price = (float)$entry['total']; }       // bereits EUR/kWh
             if ($price === null) { continue; }
 
             $ts = null;
