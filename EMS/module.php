@@ -444,10 +444,64 @@ class EMS extends IPSModule
             if (($element['type'] ?? '') === 'ExpansionPanel' && ($element['caption'] ?? '') === '💰 Tibber & Tarif') {
                 foreach ($element['items'] as $idx => $item) {
                     if (($item['name'] ?? '') === 'VAR_TIB_PT15M_Today') {
-                        array_splice($element['items'], $idx, 0, array(array(
-                            'type'    => 'Label',
-                            'caption' => $this->getPT15MStatusLine(),
-                        )));
+                        array_splice($element['items'], $idx, 0, array($this->statusLabel($this->getPT15MStatusLine())));
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+        unset($element);
+
+        // 3c. Netzmesspunkte-Panel: pauschalen "schau oben"-Hinweis durch eine
+        // Status-Zeile JE FELD ersetzen (Dietmars Praezisierung 20.08.2026:
+        // nicht ein Panel-weiter Verweis, sondern direkt hinter jedem
+        // relevanten Auswahlfeld einzeln).
+        $gridFieldMap = array(
+            'VAR_SM_L1_Power'    => 'l1',
+            'VAR_SM_L2_Power'    => 'l2',
+            'VAR_SM_L3_Power'    => 'l3',
+            'VAR_SM_Total_Power' => 'total',
+            'VAR_SM_Frequency'   => 'frequency',
+            'VAR_SM_Status'      => 'status',
+        );
+        foreach ($form['elements'] as &$element) {
+            if (($element['type'] ?? '') === 'ExpansionPanel' && strpos($element['caption'] ?? '', '📡 Netzmesspunkte') === 0) {
+                $newItems = array();
+                foreach ($element['items'] as $item) {
+                    $name = $item['name'] ?? '';
+                    if (isset($gridFieldMap[$name])) {
+                        $newItems[] = $this->statusLabel($this->getGridFieldStatusLine($gridFieldMap[$name]));
+                    }
+                    // Den alten Pauschal-Verweis-Text ("Schau ganz oben...") aus
+                    // der RowLayout entfernen -- die Status-Zeilen je Feld machen
+                    // ihn ueberfluessig -- die PopupButton-Erklaerung daneben
+                    // (wann brauche ich das ueberhaupt) bleibt erhalten.
+                    if (($item['type'] ?? '') === 'RowLayout' && isset($item['items'][0]['caption'])
+                        && strpos($item['items'][0]['caption'], 'Schau ganz oben im Panel') !== false) {
+                        $item['items'] = array_values(array_filter($item['items'], function ($sub) {
+                            return !(isset($sub['caption']) && strpos($sub['caption'], 'Schau ganz oben im Panel') !== false);
+                        }));
+                    }
+                    $newItems[] = $item;
+                }
+                $element['items'] = $newItems;
+                break;
+            }
+        }
+        unset($element);
+
+        // 3d. Batteriespeicher-Panel: Status-Zeile vor dem Bat1-SOC-Feld
+        // (20.08.2026, gleiches Muster wie Tibber/Netzmesspunkte oben) --
+        // dieses Feld ist das einzige der Batteriestring-Felder mit einer
+        // roten Pflichtfeld-Kennzeichnung, weil ohne SOC-Wert (weder
+        // automatisch noch manuell) Tagesplan/optimize() faelschlich mit
+        // SOC=0% rechnen.
+        foreach ($form['elements'] as &$element) {
+            if (($element['type'] ?? '') === 'ExpansionPanel' && ($element['caption'] ?? '') === '🔋 Batteriespeicher') {
+                foreach ($element['items'] as $idx => $item) {
+                    if (($item['name'] ?? '') === 'VAR_BAT1_SOC') {
+                        array_splice($element['items'], $idx, 0, array($this->statusLabel($this->getBatterySocStatusLine())));
                         break;
                     }
                 }
@@ -1224,6 +1278,110 @@ class EMS extends IPSModule
     }
 
     /**
+     * Pro-Feld-Status fuer die "Netzmesspunkte"-Fallback-Felder (20.08.2026,
+     * Dietmars Praezisierung: nicht ein Pauschalhinweis "schau oben", sondern
+     * direkt hinter jedem einzelnen Auswahlfeld). Ehrlich nach dem, was der
+     * Code tatsaechlich tut, nicht pauschal "automatisch" behauptet:
+     * - Netz Gesamtleistung hat einen echten Automatik-Pfad ueber InverterHub
+     *   (readState(), gridPowerID) -- hier ehrlich ✅/⚠️/ℹ️ je nach Fund.
+     * - Phasenwerte (L1-L3), Frequenz, SmartMeter-Status haben AKTUELL KEINEN
+     *   Automatik-Pfad im Code -- das waere gelogen als "automatisch
+     *   verbunden" zu zeigen. Klar als "keine Automatik vorgesehen" markiert,
+     *   statt es zu verschweigen.
+     */
+    /**
+     * Aktueller Batterie-SOC (%), bevorzugt automatisch ueber InverterHub
+     * (socID), sonst manuelle Bat1/Bat2-Fallback-Felder -- derselbe Automatik-
+     * Pfad wie in readState(), aber als eigenstaendige Methode, weil
+     * BuildDayPlan() bislang direkt an den manuellen Feldern vorbeigebaut
+     * hatte (20.08.2026, gleicher Fehlertyp wie die PT15M-Preise: neues
+     * Feature nutzte die vorhandene Discovery nicht). readState() bleibt
+     * unveraendert (dort schon korrekt, inkl. Leistungswerten).
+     */
+    private function getCurrentBatterySoc()
+    {
+        $inv = $this->getInverterEntry();
+        if ($inv !== null && ($inv['socID'] ?? 0) > 0) {
+            return (float)$this->readDiscoveredVar($inv['socID'], 0);
+        }
+        $soc = (float)$this->readVar('VAR_BAT1_SOC', 0);
+        if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
+            $soc = ($soc + (float)$this->readVar('VAR_BAT2_SOC', 0)) / 2.0;
+        }
+        return $soc;
+    }
+
+    /**
+     * Status-Zeile fuer das Bat1-SOC-Fallback-Feld — mit roter Pflichtfeld-
+     * Kennzeichnung, wenn das Feld wirklich unabdingbar ist (Dietmars
+     * Praezisierung 20.08.2026: nicht nur "nicht automatisch verbunden"
+     * sagen, sondern wenn es ein echtes Pflichtfeld ist, das auch in Rot
+     * hervorheben). Pflicht bedeutet hier konkret: BAT_Active ist an, aber
+     * WEDER InverterHub liefert einen SOC NOCH ist das manuelle Feld
+     * gesetzt -- dann rechnet EMS intern mit SOC=0%, was Tagesplan und
+     * optimize() zu falschen Entscheidungen verleiten kann (z.B. unnoetiges
+     * Nachladen, weil die Batterie faelschlich als leer gilt).
+     */
+    /**
+     * Normalisiert eine Status-Helper-Rueckgabe (einfacher String ODER schon
+     * fertiges Label-Array mit 'color') zu einem einsatzbereiten form.json-
+     * Label-Element. Vermeidet, dass jeder Status-Helper (getPT15MStatusLine,
+     * getGridFieldStatusLine, getBatterySocStatusLine, ...) selbst das
+     * Array-Wrapping wiederholen muss -- nur die roten Pflichtfeld-Faelle
+     * liefern direkt ein Array mit 'color' (20.08.2026).
+     */
+    private function statusLabel($textOrArray)
+    {
+        if (is_array($textOrArray)) {
+            return array('type' => 'Label', 'caption' => $textOrArray['caption'], 'color' => $textOrArray['color']);
+        }
+        return array('type' => 'Label', 'caption' => $textOrArray);
+    }
+
+    private function getBatterySocStatusLine()
+    {
+        $inv = $this->getInverterEntry();
+        if ($inv !== null && ($inv['socID'] ?? 0) > 0) {
+            return sprintf(
+                '✅ Automatisch verbunden: InverterHub #%d liefert den Batterie-SOC — Feld unten wird ignoriert.',
+                $inv['instanceID']
+            );
+        }
+        if (!$this->ReadPropertyBoolean('BAT_Active')) {
+            return 'ℹ️ Batteriespeicher ist deaktiviert — Feld unten wird nicht benötigt.';
+        }
+        if ($this->ReadPropertyInteger('VAR_BAT1_SOC') > 0) {
+            return '⚠️ Keine InverterHub-Instanz gefunden — Feld unten als manueller Fallback aktiv.';
+        }
+        return array(
+            'type'    => 'Label',
+            'caption' => '⛔ PFLICHTFELD: Keine InverterHub-Instanz gefunden UND kein Fallback verknüpft — EMS rechnet sonst mit SOC=0% und trifft falsche Entscheidungen (z. B. unnötiges Nachladen). Bitte unten verknüpfen.',
+            'color'   => 0xFF0000,
+        );
+    }
+
+    private function getGridFieldStatusLine($field)
+    {
+        if ($field === 'total') {
+            $inv = $this->getInverterEntry();
+            if ($inv === null) {
+                return 'ℹ️ Keine InverterHub-Instanz gefunden — Feld unten wird benötigt.';
+            }
+            if (($inv['gridPowerID'] ?? 0) > 0) {
+                return sprintf(
+                    '✅ Automatisch verbunden: InverterHub #%d liefert die Netz-Gesamtleistung — Feld unten wird ignoriert.',
+                    $inv['instanceID']
+                );
+            }
+            return sprintf(
+                '⚠️ InverterHub #%d gefunden, liefert aber keine Netzleistung — Feld unten als Fallback aktiv.',
+                $inv['instanceID']
+            );
+        }
+        return 'ℹ️ EMS liest diesen Wert aktuell nicht automatisch von einem Partnermodul — nur diese manuelle Verknüpfung wird genutzt, falls gesetzt.';
+    }
+
+    /**
      * Menschenlesbare Statuszeile fuer das Formular: zeigt an, ob und WOMIT
      * das Fallback-Feld VAR_TIB_PT15M_Today gerade automatisch versorgt wird
      * (Dietmars Einwand 20.08.2026: ein Auswahlfeld allein sagt nicht, ob es
@@ -1596,10 +1754,7 @@ class EMS extends IPSModule
         $r = 0;
         foreach ($ranked as $slotIdx => $p) { $cheapRank[$slotIdx] = $r++; }
 
-        $soc = (float)$this->readVar('VAR_BAT1_SOC', 0);
-        if ($this->ReadPropertyInteger('BAT_String_Count') >= 2) {
-            $soc = ($soc + (float)$this->readVar('VAR_BAT2_SOC', 0)) / 2.0;
-        }
+        $soc = $this->getCurrentBatterySoc();
         $nowSlot  = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
         $chargeKw = min($maxW / 1000.0, $capKwh * 0.5); // wie bisher: Ladegeschwindigkeit aus Leistungsgrenze/0.5C geschaetzt
 

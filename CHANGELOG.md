@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.21.4 (2026-08-20)
+- **Status-Zeile jetzt wirklich JE FELD statt Pauschalhinweis** — Dietmars
+  Präzisierung: nicht "schau oben im Verbund-Status-Panel nach", sondern
+  direkt hinter jedem einzelnen betroffenen Auswahlfeld. Netzmesspunkte-
+  Panel: der alte Pauschal-Verweistext ist raus, stattdessen bekommt jedes
+  Feld (Gesamtleistung, L1-L3, Frequenz, Status) seine eigene, ehrliche
+  Zeile — inklusive der Felder, für die es aktuell schlicht keinen
+  Automatik-Pfad gibt (das wird jetzt auch so benannt, nicht verschwiegen).
+- **Neu: rote Pflichtfeld-Kennzeichnung** für Fälle, in denen ein fehlendes
+  Fallback-Feld nicht nur eine Funktion abschaltet, sondern EMS aktiv mit
+  einem falschen Wert weiterrechnen lässt. Erste Anwendung: Batteriespeicher-
+  Panel, Bat1-SOC-Feld — fehlt sowohl InverterHub-Automatik als auch die
+  manuelle Verknüpfung, während `BAT_Active` an ist, erscheint jetzt ein
+  roter ⛔-Hinweis statt eines neutralen Hinweistons.
+- **Fix: `BuildDayPlan()` las den Batterie-SOC bislang nur manuell**, exakt
+  derselbe Fehlertyp wie der PT15M-Preise-Fix in 0.21.2 — ein neues Feature
+  (Tagesplan) nutzte die längst vorhandene InverterHub-Discovery nicht. Neue
+  gemeinsame Methode `getCurrentBatterySoc()`, `readState()` bleibt
+  unverändert (dort war es schon korrekt).
+- Neue verbundweite SUITE.md-Konvention erweitert um die vierte Ampel-Stufe
+  (⛔ Pflichtfeld) und die JE-FELD-Präzisierung.
+
 ## 0.21.3 (2026-08-20)
 - **Neu: Status-Zeile über dem manuellen PT15M-Fallback-Feld** — zeigt jetzt
   direkt im Formular (nicht nur im "🔗 Verbund-Status"-Panel weiter oben),
