@@ -382,14 +382,17 @@ class EMS extends IPSModule
                 ),
                 array(
                     'type'    => 'Label',
+                    'name'    => 'DiscoverySummaryLabel',
                     'caption' => $this->getDiscoverySummaryLine(),
                 ),
                 array(
                     'type'    => 'Label',
+                    'name'    => 'FederationHealthLabel',
                     'caption' => 'Verbund-Gesundheit: ' . $this->GetValue('EMS_FederationHealth')
                 ),
                 array(
                     'type'    => 'Label',
+                    'name'    => 'BoostStatusLabel',
                     'caption' => $this->getBoostStatusLine(),
                 ),
                 array(
@@ -399,6 +402,7 @@ class EMS extends IPSModule
                     'items'   => array(
                         array(
                             'type'    => 'Label',
+                            'name'    => 'PartnerDetailLabel',
                             'caption' => 'NRG-Stack Partnermodule: ' . $this->GetValue('EMS_Partners')
                         ),
                     )
@@ -781,6 +785,17 @@ class EMS extends IPSModule
         $this->SetValue('EMS_Situation', $situationSummary);
 
         $this->GetFederationHealth();
+
+        // Formular live nachziehen, falls es gerade offen ist (20.08.2026,
+        // Live-Fund: der Button aktualisiert das PHP-seitig, aber
+        // GetConfigurationForm() wird nach einem RequestAction NICHT vom
+        // WebFront automatisch neu angefragt -- ohne UpdateFormField() blieb
+        // z.B. die Kopfzeile dauerhaft auf "Noch nicht gesucht" stehen, obwohl
+        // die Suche laengst gelaufen war und Partnermodule/Verbund-Gesundheit
+        // korrekt aktualisiert wurden. No-op, wenn kein Formular offen ist.
+        $this->UpdateFormField('DiscoverySummaryLabel', 'caption', $this->getDiscoverySummaryLine());
+        $this->UpdateFormField('FederationHealthLabel', 'caption', 'Verbund-Gesundheit: ' . $this->GetValue('EMS_FederationHealth'));
+        $this->UpdateFormField('PartnerDetailLabel', 'caption', 'NRG-Stack Partnermodule: ' . $summary);
 
         return $partners;
     }
@@ -1762,6 +1777,7 @@ class EMS extends IPSModule
         $this->WriteAttributeInteger('BatteryBoostUntil', time() + $minutes * 60);
         $this->emsLog(EMS_LOG_BASIC, sprintf('🚀 Batterie-Boost gestartet fuer %d Minuten', $minutes));
         $this->Update();
+        $this->UpdateFormField('BoostStatusLabel', 'caption', $this->getBoostStatusLine());
     }
 
     /**
@@ -1772,6 +1788,7 @@ class EMS extends IPSModule
         $this->WriteAttributeInteger('BatteryBoostUntil', 0);
         $this->emsLog(EMS_LOG_BASIC, 'Batterie-Boost manuell beendet');
         $this->Update();
+        $this->UpdateFormField('BoostStatusLabel', 'caption', $this->getBoostStatusLine());
     }
 
     /**

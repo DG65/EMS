@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.21.7 (2026-08-20)
+- **Fix: "🔎 Jetzt neu suchen"-Button aktualisierte die neue Status-Kopfzeile
+  nicht im bereits offenen Formular** — Dietmars Live-Fund: Klick auf den
+  Button, Partnermodule/Verbund-Gesundheit wurden korrekt aktualisiert, aber
+  die Kopfzeile blieb dauerhaft auf "ℹ️ Noch nicht gesucht" stehen. Ursache:
+  `GetConfigurationForm()` wird nach einem `RequestAction`-Button NICHT vom
+  WebFront automatisch neu ausgeführt — das betroffene `Label` war beim
+  ersten Formular-Aufbau eingefroren. Fix: `Discover()` ruft jetzt
+  `UpdateFormField()` für Kopfzeile, Verbund-Gesundheit und die
+  Partnermodul-Details auf; `StartBatteryBoost()`/`StopBatteryBoost()`
+  ebenso für die Boost-Statuszeile (gleicher Fehlertyp, gleich mitgefixt).
+  Neue Stolperfalle 12 in SUITE.md — betrifft potenziell jedes Modul mit
+  ähnlichen Status-Buttons.
+
 ## 0.21.6 (2026-08-20)
 - **Status je Feld jetzt auch im "⚡ Wechselrichter & PV"-Panel** (gleiches
   Muster wie Netzmesspunkte/Tibber/Batteriespeicher zuvor). Drei Felder mit
