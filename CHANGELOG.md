@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.22.3 (2026-08-20)
+- **Fix: `EMS_GetDayPlan()` lieferte nach dem 0.22.2-Fix ein zehnfach zu
+  kleines `price`** — BuildDayPlan()/`simulateDaySlot()` rechnen intern
+  seit 0.22.2 korrekt in €/kWh (passend zu EMS' eigenen Preisschwellen),
+  aber `GetDayPlan()` gab diesen internen Wert unverändert nach außen
+  weiter, statt ihn für den externen Vertrag zurück auf ct/kWh
+  umzurechnen (Dashboards Erwartung, konsistent zu Tibber Grid Rewards
+  Kurve). Jetzt: `GetDayPlan()` rechnet `price` explizit auf ct/kWh um
+  (`× 100`), und der Vertrag liefert zusätzlich ein selbstdokumentierendes
+  `priceUnit: "ct/kWh"`-Feld, damit diese Verwechslung nicht unbemerkt
+  wieder auftreten kann.
+
 ## 0.22.2 (2026-08-20)
 - **Kritischer Fix: Einheiten-Verwechslung ct/kWh vs. €/kWh in allen
   Preisvergleichen von `BuildDayPlan()`.** Aufgedeckt durch Dashboards

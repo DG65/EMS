@@ -1558,6 +1558,18 @@ class EMS extends IPSModule
      * nativen IPS-Kalender (der bleibt architektonisch auf einen Tag
      * begrenzt, siehe SUITE.md). contractVersion 1.0, additiv erweiterbar.
      */
+    /**
+     * Liefert 'price' bewusst in CT/KWH nach aussen (20.08.2026, Fix nach
+     * Ruecksprache mit Dashboard) -- INTERN rechnet BuildDayPlan()/
+     * simulateDaySlot() seit 0.22.2 in EUR/kWh (passend zu EMS' eigenen
+     * Preisschwellen-Properties), aber der externe Vertrag soll konsistent
+     * zur Tibber-Grid-Reward-Konvention bleiben (ct/kWh, siehe SUITE.md
+     * Stolperfalle 16 + `TIBBERGR_GetPriceCurve`). Ohne diese Rueckumrechnung
+     * haette GetDayPlan() nach dem 0.22.2-Fix ploetzlich einen zehnfach zu
+     * kleinen Wert geliefert (0.2348 statt 23.48) -- Dashboard hatte parallel
+     * ihren eigenen (unabhaengigen) *100-Bug entfernt, beide Faktor-100-
+     * Fehler haetten sich sonst gegenseitig unbemerkt aufgehoben oder addiert.
+     */
     public function GetDayPlan()
     {
         $today    = json_decode($this->ReadAttributeString('DayPlan'), true) ?: array();
@@ -1567,13 +1579,15 @@ class EMS extends IPSModule
         $baseTomorrow = strtotime('tomorrow');
         foreach ($today as $slot => $entry) {
             $entry['time'] = $baseToday + $slot * 900;
+            if (isset($entry['price']) && $entry['price'] !== null) { $entry['price'] = round($entry['price'] * 100, 2); }
             $out[] = $entry;
         }
         foreach ($tomorrow as $slot => $entry) {
             $entry['time'] = $baseTomorrow + $slot * 900;
+            if (isset($entry['price']) && $entry['price'] !== null) { $entry['price'] = round($entry['price'] * 100, 2); }
             $out[] = $entry;
         }
-        return array('contractVersion' => '1.0', 'slots' => $out);
+        return array('contractVersion' => '1.0', 'priceUnit' => 'ct/kWh', 'slots' => $out);
     }
 
     /**
