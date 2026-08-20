@@ -515,12 +515,21 @@ class EMS extends IPSModule
         // SOC=0% rechnen.
         foreach ($form['elements'] as &$element) {
             if (($element['type'] ?? '') === 'ExpansionPanel' && ($element['caption'] ?? '') === '🔋 Batteriespeicher') {
-                foreach ($element['items'] as $idx => $item) {
-                    if (($item['name'] ?? '') === 'VAR_BAT1_SOC') {
-                        array_splice($element['items'], $idx, 0, array($this->statusLabel($this->getBatterySocStatusLine())));
-                        break;
+                $newItems = array();
+                foreach ($element['items'] as $item) {
+                    $name = $item['name'] ?? '';
+                    // Vor Bat1-SOC UND vor Bat2-SOC dieselbe Zeile einfuegen
+                    // (20.08.2026, Dietmars Nachfrage: die Zeile stand nur ueber
+                    // Batteriestring 1, obwohl InverterHub bei zwei Strings
+                    // einen bereits aggregierten Wert liefert, der GENAUSO fuer
+                    // Batteriestring 2 gilt -- sonst sieht das aus wie eine
+                    // offene Frage bei Bat2, obwohl auch dort alles geklaert ist).
+                    if ($name === 'VAR_BAT1_SOC' || $name === 'VAR_BAT2_SOC') {
+                        $newItems[] = $this->statusLabel($this->getBatterySocStatusLine());
                     }
+                    $newItems[] = $item;
                 }
+                $element['items'] = $newItems;
                 break;
             }
         }
@@ -1437,11 +1446,13 @@ class EMS extends IPSModule
 
     private function getBatterySocStatusLine()
     {
+        $twoStrings = $this->ReadPropertyInteger('BAT_String_Count') >= 2;
         $inv = $this->getInverterEntry();
         if ($inv !== null && ($inv['socID'] ?? 0) > 0) {
             return sprintf(
-                '✅ Automatisch verbunden: InverterHub #%d liefert den Batterie-SOC — Feld unten wird ignoriert.',
-                $inv['instanceID']
+                '✅ Automatisch verbunden: InverterHub #%d liefert den Batterie-SOC%s — Felder unten werden ignoriert.',
+                $inv['instanceID'],
+                $twoStrings ? ' (InverterHub liefert bereits EINEN über beide Batteriestrings aggregierten Wert, gilt also auch für Batteriestring 2)' : ''
             );
         }
         if (!$this->ReadPropertyBoolean('BAT_Active')) {

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.21.8 (2026-08-20)
+- **Fix: Status-Zeile im Batteriespeicher-Panel stand nur über Batteriestring
+  1, nicht über Batteriestring 2** — Dietmars Nachfrage bei zwei
+  Batteriestrings: "wird Bat2 SOC nicht ausgelesen?" Tatsächlich liefert
+  InverterHub bei `BAT_String_Count>=2` bereits EINEN über beide Strings
+  aggregierten SOC-Wert (`getCurrentBatterySoc()`), Bat2 wird also genauso
+  wenig gebraucht wie Bat1 — das stand aber nirgends, die Zeile fehlte
+  komplett über Batteriestring 2. Jetzt: dieselbe Statuszeile erscheint über
+  BEIDEN Feldern, und der Text bei zwei Strings nennt explizit, dass der
+  aggregierte Wert auch für Batteriestring 2 gilt.
+
 ## 0.21.7 (2026-08-20)
 - **Fix: "🔎 Jetzt neu suchen"-Button aktualisierte die neue Status-Kopfzeile
   nicht im bereits offenen Formular** — Dietmars Live-Fund: Klick auf den
