@@ -1016,15 +1016,6 @@
                     "maximum": 1,
                     "digits": 4,
                     "suffix": " €"
-                },
-                {
-                    "type": "NumberSpinner",
-                    "name": "TIB_Threshold_Export",
-                    "caption": "Preisschwelle Export ins Netz (EUR/kWh)",
-                    "minimum": 0,
-                    "maximum": 1,
-                    "digits": 4,
-                    "suffix": " €"
                 }
             ]
         },

@@ -216,7 +216,11 @@ class EMS extends IPSModule
         $this->RegisterPropertyFloat(  'TIB_Threshold_Charge',     0.15);
         $this->RegisterPropertyFloat(  'TIB_Threshold_Discharge',  0.25);
         $this->RegisterPropertyFloat(  'TIB_Threshold_WB',         0.20);
-        $this->RegisterPropertyFloat(  'TIB_Threshold_Export',     0.20);
+        // TIB_Threshold_Export ENTFERNT 20.08.2026 -- war ein wirtschaftlich
+        // rueckwaertiger Export-Ausloeser bei fester Einspeiseverguetung,
+        // siehe Kommentar in simulateDaySlot(). Kein Ersatz noetig: der
+        // korrekte Export-Ausloeser ("Bezug < Einspeiseverguetung") braucht
+        // keine eigene Schwelle, er vergleicht direkt gegen VAR_TIB_Feed_Tariff.
 
         // ── Tagesplan: Lastprognose-Fallback ────────────────────────
         // Frueher nur fuer die separate Solarspitzengesetz-Funktion genutzt
@@ -1528,14 +1532,20 @@ class EMS extends IPSModule
                 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
         }
 
-        if ($price > $ctx['thExport'] && $price > $ctx['feedTariff'] && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
-            $lossKwh = $loadW / 1000.0 * 0.25;
-            $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
-            return array('plan' => array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,
-                'reason' => sprintf('Export: %.2fct > Einspeiseverguetung %.2fct', $price * 100, $ctx['feedTariff'] * 100),
-                'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
-        }
-
+        // ENTFERNT 20.08.2026 (Live-Fund via Dashboard-Diagramm-Reason-Text,
+        // von Dietmar selbst entdeckt): es gab hier frueher einen zweiten
+        // Export-Zweig ("Export: Preis > thExport UND Preis > Einspeise-
+        // verguetung"), der bei Spotpreisen zwischen thExport (Default 0.20)
+        // und thDischarge (Default 0.25) faelschlich EXPORT statt ENTLADEN
+        // waehlte -- und das, obwohl thExport < thDischarge ist, er also
+        // JEDES Mal VOR dem Entladen-Zweig griff. Bei fester Einspeise-
+        // verguetung (wie bei Dietmars Anlage, 18.36ct) bringt Export IMMER
+        // nur die feste Verguetung, unabhaengig vom Spotpreis -- ein hoher
+        // Spotpreis macht Export nicht wertvoller. Sobald der Spotpreis ueber
+        // der Verguetung liegt, ist Entladen (teuren Netzbezug vermeiden)
+        // wirtschaftlich immer mindestens gleichwertig, meist besser. Der
+        // einzige korrekte Export-Ausloeser bleibt der Zweig oben (Bezug <
+        // Einspeiseverguetung -- Batterie exportiert, Haus aus Netz).
         if ($price > $ctx['thDischarge'] && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
             $lossKwh = $loadW / 1000.0 * 0.25;
             $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
@@ -2092,7 +2102,6 @@ class EMS extends IPSModule
         $socTargetNight = (float)$this->ReadPropertyInteger('BAT_SOC_Target_Night');
         $thCharge       = (float)$this->ReadPropertyFloat('TIB_Threshold_Charge');
         $thDischarge    = (float)$this->ReadPropertyFloat('TIB_Threshold_Discharge');
-        $thExport       = (float)$this->ReadPropertyFloat('TIB_Threshold_Export');
         $fcMinPower     = (float)$this->ReadPropertyInteger('FORECAST_Min_Power_W');
         $feedTariff     = (float)$this->readVar('VAR_TIB_Feed_Tariff', 0.1836);
         $enwgActive     = $this->ReadPropertyBoolean('ENWG14A_Active');
@@ -2120,7 +2129,7 @@ class EMS extends IPSModule
             'socTargetDay' => $socTargetDay, 'hystSoc' => $hystSoc,
             'socMin' => $socMin, 'socReserve' => $socReserve, 'socTargetNight' => $socTargetNight,
             'capKwh' => $capKwh, 'chargeKw' => $chargeKw, 'maxW' => $maxW,
-            'feedTariff' => $feedTariff, 'thCharge' => $thCharge, 'thExport' => $thExport, 'thDischarge' => $thDischarge,
+            'feedTariff' => $feedTariff, 'thCharge' => $thCharge, 'thDischarge' => $thDischarge,
         );
 
         $plan = array();

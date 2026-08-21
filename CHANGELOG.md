@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.22.6 (2026-08-20)
+- **Kritischer Fix: wirtschaftlich rückwärtiger Export-Entscheid bei
+  Spotpreisen zwischen Export- und Entladen-Schwelle entfernt.** Live-Fund
+  über den Reason-Text im Dashboard-Diagramm ("Export: 28,45ct >
+  Einspeisevergütung 18,36ct") — von Dietmar selbst als unplausibel
+  erkannt: bei fester Einspeisevergütung bringt Export IMMER nur die feste
+  Vergütung, unabhängig vom Spotpreis. Der entfernte Zweig wählte
+  fälschlich "Export" statt "Entladen", sobald der Spotpreis über
+  `TIB_Threshold_Export` (Standard 0,20 €) lag — und weil dieser
+  Schwellwert NIEDRIGER als `TIB_Threshold_Discharge` (Standard 0,25 €)
+  war, griff er JEDES Mal zuerst, der Entladen-Zweig kam gar nie zum Zug.
+  Sobald der Spotpreis über der Einspeisevergütung liegt, ist Entladen
+  (teuren Netzbezug vermeiden) wirtschaftlich mindestens gleichwertig,
+  meist besser — der einzige korrekte Export-Auslöser bleibt der
+  bestehende Zweig "Bezug < Einspeisevergütung". Die jetzt ungenutzte
+  Property `TIB_Threshold_Export` wurde entfernt (kein Ersatz nötig).
+
 ## 0.22.5 (2026-08-20)
 - Sicherheits-Hinweistext beim "🔄 Übernehmen erzwingen"-Button ergänzt
   (CometWiFi-Anregung): stellt klar, dass EMS' `ApplyChanges()` keine
