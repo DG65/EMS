@@ -372,7 +372,7 @@ class EMS extends IPSModule
             'items'    => array(
                 array(
                     'type'    => 'Label',
-                    'caption' => 'ℹ️ EMS Version ' . EMS_NEWS_VERSION . ' (Build ' . $this->getOwnBuild() . ')'
+                    'caption' => 'ℹ️ EMS Version ' . $this->getOwnVersion() . ' (Build ' . $this->getOwnBuild() . ')'
                 ),
                 array(
                     'type'    => 'Label',
@@ -659,6 +659,12 @@ class EMS extends IPSModule
     {
         $lib = @IPS_GetLibrary('{90286A25-E6C9-4A66-BD4E-0CFB707C2C6C}');
         return $lib['Build'] ?? '?';
+    }
+
+    private function getOwnVersion()
+    {
+        $lib = @IPS_GetLibrary('{90286A25-E6C9-4A66-BD4E-0CFB707C2C6C}');
+        return $lib['Version'] ?? EMS_NEWS_VERSION;
     }
 
     // ----------------------------------------------------------------
@@ -1525,13 +1531,24 @@ class EMS extends IPSModule
         }
 
         // Kein PV-Ueberschuss -- Batterie vs. Netz.
-        if ($ctx['feedTariff'] > ($price + 0.001) && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
+        //
+        // Live-Fund 22.08.2026 (Dietmars Tooltip-Beispiel 13:00 Uhr, 18,01ct
+        // Bezug vs. 18,36ct Verguetung, kein PV-Ueberschuss an diesem Slot):
+        // dieser Zweig pruefte bisher NUR die statische Sicherheitsmarge
+        // (socMin+socReserve+hystSoc), nicht die Preis-Reserve fuer spaeter
+        // am Tag kommende teure Stunden ($priceBonusPct/$expensiveReserveKwh,
+        // oben fuer den PV-Lade-Zweig berechnet) -- exakt dieselbe Kritik wie
+        // beim urspruenglichen Export-Bug, nur in diesem zweiten Zweig
+        // versteckt: die Batterie wurde fuer 18,36ct leergezogen, obwohl
+        // abends 40+ct anstanden. Jetzt: dieselbe Reserve gilt hier genauso.
+        if ($ctx['feedTariff'] > ($price + 0.001) && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'] + $priceBonusPct)) {
             // Bezug ist JETZT billiger als die Einspeiseverguetung -- die
             // gespeicherte Energie ist mehr wert, wenn sie exportiert
             // wird, als wenn sie den (billigeren) Netzbezug ersetzt.
             // Hausverbrauch wird stattdessen guenstig aus dem Netz
             // gedeckt (Dietmars Vorgabe, 19.08.2026 -- typischer
-            // Mittags-Fall bei niedrigen Spotpreisen).
+            // Mittags-Fall bei niedrigen Spotpreisen), aber nur oberhalb
+            // der Preis-Reserve fuer spaeter kommende teure Stunden.
             $lossKwh = $loadW / 1000.0 * 0.25;
             $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
             return array('plan' => array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => 0,

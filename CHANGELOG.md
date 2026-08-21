@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.23.3 (2026-08-22)
+- **Fix: Preis-Reserve fehlte im Arbitrage-Export-Zweig** ("Es verändert
+  sich nichts" trotz Build 61 live). Diagnose per Tooltip: Dietmars
+  "Morgen"-Diagramm zeigte um 13:00 Uhr weiterhin den ALTEN kurzen Text
+  "Bezug 18,01ct < Einspeisevergütung 18,36ct -- Batterie exportiert,
+  Haus aus Netz" statt einer Preisbonus-Meldung — an diesem Slot gab es
+  laut Prognose (PV 1,17kW < Last 1,50kW) gar keinen PV-Überschuss, der
+  0.23.1/0.23.2-Preisbonus wirkt aber NUR im PV-Lade-Zweig, nicht in
+  diesem separaten "Bezug < Einspeisevergütung"-Zweig (Dietmars eigene
+  Vorgabe vom 19.08.2026). Der prüfte bisher nur die statische
+  Sicherheitsmarge, nicht die noch kommenden teuren Stunden — dieselbe
+  Kritik wie beim ursprünglichen Export-Bug, nur in einem zweiten,
+  unabhängigen Zweig versteckt. Jetzt gilt `$priceBonusPct` (dieselbe
+  aus der Lastprognose berechnete Reserve wie beim PV-Lade-Zweig) auch
+  hier als zusätzliche Exportsperre.
+- **Fix: `EMS_NEWS_VERSION`-Konstante war seit Monaten von der echten
+  Modulversion entkoppelt** (fest auf "0.6.0" trotz inzwischen 0.23.2),
+  dadurch zeigte das "Dokumentation & Hilfe"-Panel die verwirrende
+  Kombination "EMS Version 0.6.0 (Build 61)". Neue `getOwnVersion()`
+  liest die echte Version wie `getOwnBuild()` direkt aus `IPS_GetLibrary()`.
+  Die "Neu in Version"-Anzeige/Dismiss-Logik nutzt bewusst weiterhin die
+  separate `EMS_NEWS_VERSION`-Konstante (kuratierter Änderungstext, soll
+  nicht bei jedem Mini-Build erneut aufpoppen).
+
 ## 0.23.2 (2026-08-21)
 - **Fix: "Tagesplan-Berechnung dauert sehr lange"** — die Cache-Signatur
   (entscheidet, ob `BuildDayPlan()` bei jedem 30-Sekunden-Update()-Tick
