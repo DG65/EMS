@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.23.4 (2026-08-22)
+- **Fix: Lastprognose für den "Morgen"-Tagesplan war die von HEUTE.**
+  Diagnose zusammen mit Dietmar: LoadForecast liefert "Erwartung heute"
+  12,62 kWh vs. "Erwartung morgen" 17,85 kWh (+41%) — `BuildDayPlan()`
+  berechnete `$avgHouseW` bisher nur einmal aus dem Fenster "heute→morgen"
+  (`LFC_GetEnergyWindow(..., strtotime('today'), strtotime('tomorrow'))`)
+  und verwendete diesen Wert unveraendert auch für die komplette
+  Tagesplan-Simulation von morgen weiter — sowohl für
+  `computeExpensiveReserveKwh()` (Preis-Reserve) als auch für den
+  PV-Überschuss-Vergleich in `simulateDaySlot()`. Neuer eigener
+  `$avgHouseWTomorrow` aus dem Fenster "morgen→übermorgen", eigener
+  `$ctxTomorrow` mit diesem Wert für den Morgen-Simulationslauf.
+- Nebenfund (noch offen, nicht Teil dieses Fixes): `Discover()` zählt
+  LoadForecast (LFC) nicht zu den überwachten Partnermodul-Typen — ein
+  Ausfall des LFC-Vertrags würde nicht als "nicht erreichbar" gemeldet
+  wie bei den anderen 6 Modultypen. `getLfcInstance()` selbst ist davon
+  unabhängig und funktioniert korrekt.
+
 ## 0.23.3 (2026-08-22)
 - **Fix: Preis-Reserve fehlte im Arbitrage-Export-Zweig** ("Es verändert
   sich nichts" trotz Build 61 live). Diagnose per Tooltip: Dietmars

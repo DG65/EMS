@@ -2132,11 +2132,23 @@ class EMS extends IPSModule
         // Lastprognose-Fallback fuer den ganzen Tagesplan). Eine echte
         // 15-Min-Lastkurve ist ein offener Ausbauschritt fuer LFC selbst.
         $avgHouseW = (float)$this->ReadPropertyInteger('NEG_Avg_House_Load_W');
+        $avgHouseWTomorrow = $avgHouseW;
         $lfcId = $this->getLfcInstance();
         if ($lfcId > 0) {
             $window = @LFC_GetEnergyWindow($lfcId, strtotime('today'), strtotime('tomorrow'));
             if (is_array($window) && isset($window['kwh']) && ($window['coverage'] ?? 0) >= 1.0) {
                 $avgHouseW = ($window['kwh'] * 1000.0) / 24.0;
+            }
+            // Live-Fund 22.08.2026 (Dietmars Lastprognose: heute 12,62kWh vs.
+            // morgen 17,85kWh -- +41%): der obige Wert deckt nur das Fenster
+            // "heute->morgen" ab und wurde bisher UNVERAENDERT auch fuer die
+            // komplette Tagesplan-Simulation von MORGEN weiterverwendet.
+            // Eigener Lastdurchschnitt fuer "morgen->uebermorgen", damit die
+            // Preis-Reserve (computeExpensiveReserveKwh) fuer den Morgen-Plan
+            // nicht die falsche (heutige) Tagesmenge zugrunde legt.
+            $windowTomorrow = @LFC_GetEnergyWindow($lfcId, strtotime('tomorrow'), strtotime('tomorrow +1 day'));
+            if (is_array($windowTomorrow) && isset($windowTomorrow['kwh']) && ($windowTomorrow['coverage'] ?? 0) >= 1.0) {
+                $avgHouseWTomorrow = ($windowTomorrow['kwh'] * 1000.0) / 24.0;
             }
         }
 
@@ -2218,13 +2230,20 @@ class EMS extends IPSModule
         $tr = 0;
         foreach ($tomorrowRanked as $slotIdx => $p) { $tomorrowCheapRank[$slotIdx] = $tr++; }
 
-        $tomorrowExpensiveReserve = $this->computeExpensiveReserveKwh($tomorrowPrices, $thDischarge, $avgHouseW);
+        // Eigener Kontext fuer Morgen: $avgHouseWTomorrow statt $avgHouseW
+        // (siehe Kommentar oben bei dessen Berechnung), sonst rechnet sowohl
+        // die Reserve als auch der PV-Ueberschuss-Vergleich in simulateDaySlot()
+        // fuer Morgen faelschlich mit der HEUTIGEN Lastprognose.
+        $ctxTomorrow = $ctx;
+        $ctxTomorrow['avgHouseW'] = $avgHouseWTomorrow;
+
+        $tomorrowExpensiveReserve = $this->computeExpensiveReserveKwh($tomorrowPrices, $thDischarge, $avgHouseWTomorrow);
 
         $tomorrowPlan = array();
         for ($slot = 0; $slot < 96; $slot++) {
             $price = $tomorrowPrices[$slot];
             $pvW   = (float)($pvfSlots[96 + $slot] ?? 0.0);
-            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $tomorrowCheapRank, $ctx, $tomorrowExpensiveReserve[$slot] ?? 0.0);
+            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $tomorrowCheapRank, $ctxTomorrow, $tomorrowExpensiveReserve[$slot] ?? 0.0);
             $tomorrowPlan[$slot] = $result['plan'];
             $soc = $result['soc'];
         }
