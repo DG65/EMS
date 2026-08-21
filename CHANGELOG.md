@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.23.1 (2026-08-21)
+- **Preisbewusste Sicherheitsmarge auf echte Bedarfsrechnung umgestellt**
+  (0.23.0 war zu schwach). Live-Beispiel von Dietmar: Preis 18ct jetzt,
+  bis zu 46ct abends — der alte, auf +15 Prozentpunkte gedeckelte Bonus
+  hob das Tagesziel nur von ~27% auf 42% an, obwohl bei diesem
+  Preisgefälle deutlich mehr Reserve sinnvoll wäre. Der Deckel war
+  ebenso willkürlich wie die kritisierte starre Zielprozentzahl selbst.
+  Neue `computeExpensiveReserveKwh()`: rechnet direkt aus der
+  Lastprognose (`NEG_Avg_House_Load_W`) und allen noch kommenden
+  Viertelstunden mit Preis über der Entladen-Schwelle den ECHTEN
+  kWh-Bedarf aus — der Bonus ist jetzt proportional zum tatsächlichen
+  Bedarf, kein künstlicher Prozentpunkte-Deckel mehr (nur noch die
+  100%-Grenze). Reason-Text nennt jetzt die konkrete kWh-Reserve statt
+  nur einen Prozentsatz.
+
 ## 0.23.0 (2026-08-21)
 - **Neu: preisbewusste Sicherheitsmarge für das Tagesziel.** Dietmars
   Einwand: die bisherige Zielberechnung (`getDynamicSocTargetDay()`) fragt
