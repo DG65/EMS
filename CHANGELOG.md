@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.23.2 (2026-08-21)
+- **Fix: "Tagesplan-Berechnung dauert sehr lange"** — die Cache-Signatur
+  (entscheidet, ob `BuildDayPlan()` bei jedem 30-Sekunden-Update()-Tick
+  wirklich neu rechnet) beruhte auf dem ROHEN, unverarbeiteten JSON-Text
+  von Tibber Grid Reward, nicht auf den tatsächlich relevanten Preisen.
+  Nebenfelder wie `level_tibber`/`basis`/`netzentgelt` können sich
+  ändern, ohne dass sich ein einziger Preis ändert — jede solche Änderung
+  ließ die Signatur abweichen und erzwang eine komplette Neuberechnung
+  (192 Slots, 96 Kalender-Schreibvorgänge) praktisch bei jedem Tick,
+  statt nur wenn sich echte Preisdaten ändern. Signatur hängt jetzt am
+  Hash der GEPARSTEN 96 Preiswerte — stabil gegen jede für die Planung
+  irrelevante Formatierungs-/Nebenfeld-Änderung der Quelle.
+
 ## 0.23.1 (2026-08-21)
 - **Preisbewusste Sicherheitsmarge auf echte Bedarfsrechnung umgestellt**
   (0.23.0 war zu schwach). Live-Beispiel von Dietmar: Preis 18ct jetzt,

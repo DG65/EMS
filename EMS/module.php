@@ -2075,7 +2075,21 @@ class EMS extends IPSModule
     public function BuildDayPlan(bool $force = false)
     {
         $todayJson = $this->getPT15MTodayJson();
-        $signature = date('Y-m-d') . '|' . md5($todayJson);
+
+        // Signatur NICHT mehr aus dem rohen JSON-Text (21.08.2026, Live-Fund:
+        // "die Berechnung dauert sehr lange"). Tibber Grid Rewards Kurve
+        // enthaelt Nebenfelder (level_tibber, basis, netzentgelt, ...), die
+        // sich aendern koennen OHNE dass sich ein einziger Preis aendert --
+        // jede Nebenfeld-Aenderung liess den rohen Text-Hash abweichen und
+        // erzwang eine komplette Neuberechnung (192 Slots, 96 Kalender-
+        // Schreibvorgaenge) bei praktisch JEDEM 30-Sekunden-Update()-Tick,
+        // statt nur wenn sich die tatsaechlich relevanten Preise aendern.
+        // Die Signatur haengt jetzt an den GEPARSTEN Preisen (nur die 96
+        // Werte, die simulateDaySlot() ueberhaupt sieht) -- stabil gegen
+        // jede fuer die Planung irrelevante Formatierungs-/Nebenfeld-
+        // Aenderung der Quelle.
+        $prices    = $this->parsePT15M($todayJson);
+        $signature = date('Y-m-d') . '|' . md5(json_encode($prices));
 
         if (!$force && $this->ReadAttributeString('DayPlanSignature') === $signature) {
             return 'ℹ️ Tagesplan unverändert (gleiche Preisdaten wie beim letzten Lauf) — keine Neuberechnung nötig.';
@@ -2090,7 +2104,6 @@ class EMS extends IPSModule
             return '⛔ Kein Tagesplan möglich: keine PT15M-Preisdaten (weder automatisch von Tibber Grid Reward noch manuell verknüpft) oder Tibber/Batteriespeicher deaktiviert.';
         }
 
-        $prices   = $this->parsePT15M($todayJson);
         $pvfSlots = $this->getPvfSlotsWatt(); // Index 0-191 (heute+morgen), hier nur 0-95 genutzt
 
         // Lastprognose je Slot: LFC liefert bisher nur eine Fenster-Summe
