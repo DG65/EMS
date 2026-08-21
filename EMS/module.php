@@ -1453,7 +1453,7 @@ class EMS extends IPSModule
      * fuer jeden Slot gleich bleiben (siehe Aufrufer fuer den Aufbau).
      * Liefert ['plan' => [...], 'soc' => $neuerSoc].
      */
-    private function simulateDaySlot($slot, $price, $pvW, $soc, array $cheapRank, array $ctx)
+    private function simulateDaySlot($slot, $price, $pvW, $soc, array $cheapRank, array $ctx, $futureMaxPrice = null)
     {
         $hourOfSlot = (int)($slot / 4);
 
@@ -1480,13 +1480,31 @@ class EMS extends IPSModule
                 'reason' => sprintf('Negativpreis %.2fct -- immer laden', $price * 100), 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
         }
 
+        // Preisbewusste Sicherheitsmarge (20.08.2026, Dietmars Einwand: das
+        // reine energetische Tagesziel fragt nur "reicht es bis morgen?",
+        // nicht "lohnt es sich, JETZT zu exportieren, wenn spaeter am Tag
+        // noch eine teurere Stunde kommt?"). Steht im verbleibenden
+        // Preishorizont eine Stunde an, die spuerbar teurer ist als die
+        // Entladen-Schwelle, wird das Tagesziel fuer DIESEN Slot temporaer
+        // angehoben -- der zusaetzliche Puffer ist gedeckelt (max. 15
+        // Prozentpunkte), damit daraus kein "nie mehr exportieren" wird.
+        // $futureMaxPrice ist der teuerste bekannte Preis von diesem Slot an
+        // bis zum Ende des Preishorizonts (siehe BuildDayPlan()).
+        $priceBonus = 0.0;
+        if ($futureMaxPrice !== null && $futureMaxPrice > $ctx['thDischarge']) {
+            $priceBonus = min(15.0, ($futureMaxPrice - $ctx['thDischarge']) * 100.0);
+        }
+        $effectiveTargetDay = min(100.0, $ctx['socTargetDay'] + $priceBonus);
+
         if ($surplusW > $ctx['fcMinPower']) {
-            if ($soc < ($ctx['socTargetDay'] - $ctx['hystSoc'])) {
+            if ($soc < ($effectiveTargetDay - $ctx['hystSoc'])) {
                 $gainKwh = $surplusW / 1000.0 * 0.25;
                 $soc = min(100.0, $soc + ($gainKwh / max(0.001, $ctx['capKwh']) * 100.0));
+                $reason = $priceBonus > 0.5
+                    ? sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%, +%.0f%% wegen teurer Stunde später)', $surplusW, $ctx['socTargetDay'], $priceBonus)
+                    : sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%)', $surplusW, $ctx['socTargetDay']);
                 return array('plan' => array('op' => EMS_OP_PV_SELFUSE, 'gw' => GW_MODE_CHARGE_PV, 'power' => 0,
-                    'reason' => sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%)', $surplusW, $ctx['socTargetDay']),
-                    'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
+                    'reason' => $reason, 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
             }
             return array('plan' => array('op' => EMS_OP_EXPORT, 'gw' => GW_MODE_AC_EXPORT, 'power' => (int)$pvW,
                 'reason' => sprintf('Akku am Ziel (SOC=%.0f%%), PV-Vollernte %.0fW exportieren', $soc, $pvW),
@@ -2132,6 +2150,8 @@ class EMS extends IPSModule
             'feedTariff' => $feedTariff, 'thCharge' => $thCharge, 'thDischarge' => $thDischarge,
         );
 
+        $futureMax = $this->computeSuffixMaxPrice($prices);
+
         $plan = array();
         for ($slot = 0; $slot < 96; $slot++) {
             if ($slot < $nowSlot) {
@@ -2141,7 +2161,7 @@ class EMS extends IPSModule
             }
             $price = $prices[$slot];
             $pvW   = (float)($pvfSlots[$slot] ?? 0.0);
-            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $cheapRank, $ctx);
+            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $cheapRank, $ctx, $futureMax[$slot] ?? null);
             $plan[$slot] = $result['plan'];
             $soc = $result['soc'];
         }
@@ -2169,11 +2189,13 @@ class EMS extends IPSModule
         $tr = 0;
         foreach ($tomorrowRanked as $slotIdx => $p) { $tomorrowCheapRank[$slotIdx] = $tr++; }
 
+        $tomorrowFutureMax = $this->computeSuffixMaxPrice($tomorrowPrices);
+
         $tomorrowPlan = array();
         for ($slot = 0; $slot < 96; $slot++) {
             $price = $tomorrowPrices[$slot];
             $pvW   = (float)($pvfSlots[96 + $slot] ?? 0.0);
-            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $tomorrowCheapRank, $ctx);
+            $result = $this->simulateDaySlot($slot, $price, $pvW, $soc, $tomorrowCheapRank, $ctx, $tomorrowFutureMax[$slot] ?? null);
             $tomorrowPlan[$slot] = $result['plan'];
             $soc = $result['soc'];
         }
@@ -2398,6 +2420,32 @@ class EMS extends IPSModule
      * ueberschreibt (die Slot-Berechnung selbst kennt nur die Uhrzeit, nicht
      * das Datum).
      */
+    /**
+     * Fuer jeden Slot: der teuerste bekannte Preis ab DIESEM Slot bis zum
+     * Ende des Preishorizonts (Suffix-Maximum, O(96)). `null`-Slots (keine
+     * Daten) werden uebersprungen, nicht als 0 gewertet (Stolperfalle 15).
+     * Liefert `null` fuer einen Slot, wenn ab dort ueberhaupt kein Preis
+     * bekannt ist. Grundlage fuer die preisbewusste Sicherheitsmarge in
+     * simulateDaySlot() (20.08.2026, Dietmars Einwand: "reicht die Energie
+     * bis morgen" -- bzw. hier: "lohnt sich Export, wenn spaeter am Tag noch
+     * eine teurere Stunde kommt?").
+     */
+    private function computeSuffixMaxPrice(array $prices)
+    {
+        // $out[$i] = teuerster Preis NACH Slot $i (exklusive $i selbst) --
+        // die aktuelle Stunde soll den Vergleich "kommt noch was Teureres"
+        // nicht mit sich selbst beantworten.
+        $out = array_fill(0, 96, null);
+        $runningMax = null;
+        for ($i = 95; $i >= 0; $i--) {
+            $out[$i] = $runningMax;
+            if (isset($prices[$i]) && $prices[$i] !== null) {
+                $runningMax = ($runningMax === null) ? $prices[$i] : max($runningMax, $prices[$i]);
+            }
+        }
+        return $out;
+    }
+
     private function parsePT15M($json, int $dayOffset = 0)
     {
         $prices = array_fill(0, 96, null);

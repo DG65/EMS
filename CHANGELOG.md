@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.23.0 (2026-08-21)
+- **Neu: preisbewusste Sicherheitsmarge für das Tagesziel.** Dietmars
+  Einwand: die bisherige Zielberechnung (`getDynamicSocTargetDay()`) fragt
+  nur "reicht die Energie bis morgen früh?", nicht "lohnt es sich, JETZT
+  zu exportieren, wenn später am Tag noch eine teurere Stunde kommt?" —
+  konkret beobachtet bei SOC 59 %, teuren Strompreisen, aber Export
+  ("Akku am Ziel"), weil das rein energetische Ziel schon erreicht war.
+  Neue Methode `computeSuffixMaxPrice()` ermittelt je Slot den teuersten
+  noch bevorstehenden Preis im bekannten Preishorizont; ist der spürbar
+  teurer als die Entladen-Schwelle, wird das Tagesziel für diesen Moment
+  automatisch angehoben (gedeckelt auf max. +15 Prozentpunkte) — die
+  Batterie hält dann mehr Reserve für die teure Stunde vor, statt den
+  PV-Überschuss sofort zu exportieren. Reason-Text nennt den Bonus
+  explizit ("+X% wegen teurer Stunde später"), damit die Entscheidung im
+  Tagesplan nachvollziehbar bleibt.
+
 ## 0.22.6 (2026-08-20)
 - **Kritischer Fix: wirtschaftlich rückwärtiger Export-Entscheid bei
   Spotpreisen zwischen Export- und Entladen-Schwelle entfernt.** Live-Fund
