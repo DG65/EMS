@@ -1185,6 +1185,34 @@ class EMS extends IPSModule
         return 0;
     }
 
+    /**
+     * Reale, vom BMS live gemeldete maximale Lade-/Entladeleistung der
+     * Batterie (Idents `bat_charge_max_w`/`bat_discharge_max_w`, InverterHub-
+     * Kategorie "Batterie (gemeinsam)") -- SOC-/temperaturabhaengig, deutlich
+     * praeziser als eine feste C-Rate-Schaetzung. Faellt auf die alte 0,5C-
+     * Schaetzung zurueck, wenn kein WR gefunden wird oder die Idents fehlen
+     * (aeltere InverterHub-Version). Gilt fuer jeden InverterHub-Treiber,
+     * nicht nur GoodWe -- die Idents sind herstellerunabhaengig.
+     */
+    private function getBatteryPowerLimitsKw($inv, $maxW, $capKwh)
+    {
+        $fallbackChargeKw = min($maxW / 1000.0, $capKwh * 0.5);
+        $result = array('chargeKw' => $fallbackChargeKw, 'dischargeKw' => $fallbackChargeKw);
+
+        if ($inv === null || ($inv['instanceID'] ?? 0) <= 0) {
+            return $result;
+        }
+        $chargeId    = $this->findChildVariableIdByIdent($inv['instanceID'], 'bat_charge_max_w');
+        $dischargeId = $this->findChildVariableIdByIdent($inv['instanceID'], 'bat_discharge_max_w');
+        if ($chargeId > 0) {
+            $result['chargeKw'] = max(0.0, (float)GetValue($chargeId) / 1000.0);
+        }
+        if ($dischargeId > 0) {
+            $result['dischargeKw'] = max(0.0, (float)GetValue($dischargeId) / 1000.0);
+        }
+        return $result;
+    }
+
     private function getWritableChargers()
     {
         $partners = $this->GetPartners();
@@ -2167,6 +2195,7 @@ class EMS extends IPSModule
             }
         }
 
+        $inv            = $this->getInverterEntry();
         $capKwh         = (float)$this->ReadPropertyFloat('BAT_Capacity_kWh');
         $maxW           = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
         $socMin         = (float)$this->ReadPropertyInteger('BAT_SOC_Min');
@@ -2195,14 +2224,28 @@ class EMS extends IPSModule
 
         $soc = $this->getCurrentBatterySoc();
         $nowSlot  = (int)(((int)date('H') * 60 + (int)date('i')) / 15);
-        $chargeKw = min($maxW / 1000.0, $capKwh * 0.5); // wie bisher: Ladegeschwindigkeit aus Leistungsgrenze/0.5C geschaetzt
+
+        // Live-Fund 24.08.2026 (Dietmar: reale Be-/Entladeraten seiner Anlage
+        // C0,6/C1 -- deutlich abweichend von der bisher pauschal angenommenen
+        // 0,5C): InverterHub meldet die tatsaechliche, vom BMS live berechnete
+        // maximale Lade-/Entladeleistung (Idents `bat_charge_max_w`/
+        // `bat_discharge_max_w`, Kategorie "Batterie (gemeinsam)") -- SOC-/
+        // temperaturabhaengig, z.B. nahe 100% SOC deutlich gedrosselt (CC/CV-
+        // Ladekurve). Das ist realistischer als jede feste C-Rate-Schaetzung
+        // und gilt herstellerunabhaengig fuer jede InverterHub-Instanz, nicht
+        // nur GoodWe. Faellt auf die alte 0,5C-Schaetzung zurueck, wenn die
+        // Idents fehlen (aeltere InverterHub-Version) oder kein WR gefunden
+        // wird.
+        $batLimits = $this->getBatteryPowerLimitsKw($inv, $maxW, $capKwh);
+        $chargeKw    = $batLimits['chargeKw'];
+        $dischargeKw = $batLimits['dischargeKw'];
 
         $ctx = array(
             'enwgActive' => $enwgActive, 'enwgStartH' => $enwgStartH, 'enwgEndH' => $enwgEndH,
             'avgHouseW' => $avgHouseW, 'fcMinPower' => $fcMinPower,
             'socTargetDay' => $socTargetDay, 'hystSoc' => $hystSoc,
             'socMin' => $socMin, 'socReserve' => $socReserve, 'socTargetNight' => $socTargetNight,
-            'capKwh' => $capKwh, 'chargeKw' => $chargeKw, 'maxW' => $maxW,
+            'capKwh' => $capKwh, 'chargeKw' => $chargeKw, 'dischargeKw' => $dischargeKw, 'maxW' => $maxW,
             'feedTariff' => $feedTariff, 'thCharge' => $thCharge, 'thDischarge' => $thDischarge,
         );
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.23.6 (2026-08-24)
+- **Reale Batterie-Lade-/Entladeleistung statt fester 0,5C-Schätzung.**
+  Dietmars Live-Angabe (Beladung C0,6, Entladung C1) und InverterHub-
+  Nachfrage ergaben: InverterHub meldet die tatsächliche, vom BMS live
+  berechnete maximale Lade-/Entladeleistung bereits (`bat_charge_max_w`/
+  `bat_discharge_max_w`, Kategorie "Batterie (gemeinsam)") — SOC-/
+  temperaturabhängig (bei SOC 96% live nur noch 5486W Ladeleistung
+  statt der nominellen 24kW bei 0,6C, typisches CC/CV-Ladeverhalten).
+  Neue `getBatteryPowerLimitsKw()` liest diese Werte direkt, fällt auf
+  die alte 0,5C-Schätzung zurück, wenn kein WR gefunden wird oder die
+  Idents fehlen (ältere InverterHub-Version). Gilt herstellerunabhängig
+  für jeden InverterHub-Treiber, nicht nur GoodWe.
+- Neues `$ctx['dischargeKw']` (noch nicht konsumiert, für künftige
+  Entladeraten-Begrenzung in `simulateDaySlot()` vorbereitet).
+
 ## 0.23.5 (2026-08-22)
 - **Fix: Morgen-Preise blieben dauerhaft `null`, obwohl Tibber sie längst
   veröffentlicht hatte.** Fund der Dashboard-Sitzung (live gegenübergestellt:
