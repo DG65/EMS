@@ -1611,7 +1611,19 @@ class EMS extends IPSModule
         if ($price > $ctx['thDischarge'] && $soc > ($ctx['socMin'] + $ctx['socReserve'] + $ctx['hystSoc'])) {
             $lossKwh = $loadW / 1000.0 * 0.25;
             $soc = max(0.0, $soc - ($lossKwh / max(0.001, $ctx['capKwh']) * 100.0));
-            return array('plan' => array('op' => EMS_OP_DISCHARGE, 'gw' => GW_MODE_DISCHARGE, 'power' => 0,
+            // Live-Fund 25.08.2026 (InverterHub-Rueckfrage, ctl_ems_power=0W
+            // bei Modus 3 live beobachtet): GW_MODE_DISCHARGE (3, "Entladen+
+            // Solar") nutzt Xmax als Obergrenze der ERLAUBTEN Entladeleistung
+            // (siehe SUITE.md-Tabelle), NICHT als "wie viel zusaetzlich" wie
+            // bei den PV-Lade-Zweigen. `power=0` blockierte die Entladung
+            // hier also komplett, statt sie zu erlauben -- Gegenbeweis im
+            // eigenen Code: der laengst funktionierende Batterie-Boost-Zweig
+            // (optimize(), GW_MODE_DISCHARGE) nutzt bereits korrekt
+            // EMS_Max_Power_W als Wert. Jetzt: reale, vom BMS gemeldete
+            // Entladeleistung ($ctx['dischargeKw'], siehe
+            // getBatteryPowerLimitsKw()) statt 0.
+            return array('plan' => array('op' => EMS_OP_DISCHARGE, 'gw' => GW_MODE_DISCHARGE,
+                'power' => (int)round($ctx['dischargeKw'] * 1000.0),
                 'reason' => sprintf('Bezug %.2fct teuer -- Eigenverbrauch aus Batterie', $price * 100),
                 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
         }

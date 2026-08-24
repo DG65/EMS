@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.23.7 (2026-08-25)
+- **Fix: Preis-Entladen-Zweig blockierte die Entladung komplett statt sie zu
+  erlauben.** Live-Fund über InverterHubs Rückfrage (`ctl_ems_mode=Entladen+
+  Solar`, `ctl_ems_power=0W` beobachtet): Modus 3 (Entladen+Solar) nutzt
+  `ctl_ems_power` als **Obergrenze der erlaubten Entladeleistung** (Xmax),
+  nicht als additiven Zusatzwert. Der Preis-Entladen-Zweig in
+  `simulateDaySlot()` schrieb dort bisher `power=0` — das kappte die
+  Entladung auf null, statt sie freizugeben, obwohl "Eigenverbrauch aus
+  Batterie" die erklärte Absicht war. Gegenbeweis im eigenen Code: der
+  bereits korrekt funktionierende Batterie-Boost-Zweig nutzt für denselben
+  Modus längst `EMS_Max_Power_W` als Wert. Jetzt: `$ctx['dischargeKw']`
+  (reale, vom BMS gemeldete Entladeleistung, siehe 0.23.6) statt 0.
+
 ## 0.23.6 (2026-08-24)
 - **Reale Batterie-Lade-/Entladeleistung statt fester 0,5C-Schätzung.**
   Dietmars Live-Angabe (Beladung C0,6, Entladung C1) und InverterHub-
