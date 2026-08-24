@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.23.5 (2026-08-22)
+- **Fix: Morgen-Preise blieben dauerhaft `null`, obwohl Tibber sie längst
+  veröffentlicht hatte.** Fund der Dashboard-Sitzung (live gegenübergestellt:
+  `TIBBERGR_GetPriceCurve` liefert morgen vollständig, `EMS_GetDayPlan()`
+  zeigt für morgen durchgehend `price:null`). Ursache: die Cache-Signatur aus
+  0.23.2 hing NUR an den heutigen Preisen. Sobald die sich (früh am Tag)
+  stabilisiert hatten, überspringt `BuildDayPlan()` die komplette Funktion —
+  inklusive des Morgen-Blocks — auch wenn Tibber die Morgen-Preise erst
+  Stunden später (typisch ca. 13-14 Uhr) veröffentlicht. Morgen-Preise werden
+  jetzt VOR dem Signatur-Vergleich geholt und sind Teil der Signatur, ihr
+  Erscheinen löst also zuverlässig eine Neuberechnung aus.
+
 ## 0.23.4 (2026-08-22)
 - **Fix: Lastprognose für den "Morgen"-Tagesplan war die von HEUTE.**
   Diagnose zusammen mit Dietmar: LoadForecast liefert "Erwartung heute"

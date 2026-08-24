@@ -2106,7 +2106,22 @@ class EMS extends IPSModule
         // jede fuer die Planung irrelevante Formatierungs-/Nebenfeld-
         // Aenderung der Quelle.
         $prices    = $this->parsePT15M($todayJson);
-        $signature = date('Y-m-d') . '|' . md5(json_encode($prices));
+
+        // Live-Fund 22.08.2026 (Dashboard-Sitzung, live gegenübergestellt:
+        // TIBBERGR_GetPriceCurve liefert morgen bereits vollstaendig, aber
+        // EMS_GetDayPlan() zeigt fuer morgen durchgehend price:null): die
+        // Signatur hing bisher NUR an den heutigen Preisen. Sobald die sich
+        // stabilisiert hatten (was frueh am Tag der Fall ist), wurde die
+        // GESAMTE Funktion uebersprungen -- inklusive des Morgen-Blocks --
+        // selbst wenn Tibber die Morgen-Preise erst Stunden spaeter
+        // veroeffentlicht (typisch ca. 13-14 Uhr). Tomorrow-Preise muessen
+        // deshalb schon HIER (vor dem Signatur-Vergleich) geholt und Teil
+        // der Signatur werden, sonst loest ihr Erscheinen keine Neuberechnung
+        // aus. Unten im Morgen-Block werden dieselben Werte weiterverwendet
+        // (keine doppelte Arbeit).
+        $tomorrowJson   = $this->getPT15MTomorrowJson();
+        $tomorrowPrices = $this->parsePT15M($tomorrowJson, 1);
+        $signature = date('Y-m-d') . '|' . md5(json_encode($prices) . '|' . json_encode($tomorrowPrices));
 
         if (!$force && $this->ReadAttributeString('DayPlanSignature') === $signature) {
             return 'ℹ️ Tagesplan unverändert (gleiche Preisdaten wie beim letzten Lauf) — keine Neuberechnung nötig.';
@@ -2222,8 +2237,8 @@ class EMS extends IPSModule
         // Nutzt dieselbe Entscheidungslogik wie oben (simulateDaySlot()),
         // beginnt aber bei Slot 0 (nicht "vergangen") und fuehrt den am Ende
         // von heute simulierten SOC nahtlos fort.
-        $tomorrowJson = $this->getPT15MTomorrowJson();
-        $tomorrowPrices = $this->parsePT15M($tomorrowJson, 1);
+        // $tomorrowJson/$tomorrowPrices bereits oben vor dem Signatur-
+        // Vergleich geholt (siehe Kommentar dort).
         $tomorrowRanked = $tomorrowPrices;
         asort($tomorrowRanked);
         $tomorrowCheapRank = array();
