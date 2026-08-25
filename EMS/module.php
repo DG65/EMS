@@ -159,6 +159,14 @@ class EMS extends IPSModule
         $this->RegisterPropertyBoolean('BAT_SOC_Dynamic_Target',   true);
         $this->RegisterPropertyInteger('BAT_SOC_Safety_Margin_Pct',10);
         $this->RegisterPropertyInteger('BAT_SOC_Reserve_Backup',   10);
+        // Umkreis, innerhalb dessen eine Rueckfahrt "heute noch" als
+        // plausibel gilt (Dietmars Vorgabe 25.08.2026, ausgeloest durch den
+        // Schneeflocke/Philippsburg-Fund): eine bewusste Geschaeftsregel
+        // beim EMS, NICHT bei Tessie -- die liefert nur die Geodaten
+        // (distanceToHomeKm/headingHome/expectedHomeArrivalSocPercent,
+        // TESSIE_GetVehicleState contractVersion 1.4), die Entscheidung
+        // "ist das noch heimfahrtrelevant" gehoert zur Tagesplanung.
+        $this->RegisterPropertyInteger('VEH_Home_Radius_Km',       200);
         for ($i = 1; $i <= 2; $i++) {
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_SOC',            0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Power',          0);
@@ -1534,7 +1542,12 @@ class EMS extends IPSModule
                 $gainKwh = $surplusW / 1000.0 * 0.25;
                 $soc = min(100.0, $soc + ($gainKwh / max(0.001, $ctx['capKwh']) * 100.0));
                 $reason = $priceBonusPct > 0.5
-                    ? sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%, +%.0f%% Reserve für %.1fkWh teure Stunden später)', $surplusW, $ctx['socTargetDay'], $priceBonusPct, $expensiveReserveKwh)
+                    // Neutral formuliert (25.08.2026): $expensiveReserveKwh
+                    // kann jetzt auch Fahrzeug-Ladebedarf enthalten (siehe
+                    // computeVehicleReserveKwh()), nicht nur teure Stunden --
+                    // "spaeteren Bedarf" statt "teure Stunden" haelt den Text
+                    // fuer beide Faelle korrekt.
+                    ? sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%, +%.0f%% Reserve für %.1fkWh späteren Bedarf)', $surplusW, $ctx['socTargetDay'], $priceBonusPct, $expensiveReserveKwh)
                     : sprintf('PV-Ueberschuss %.0fW -> Batterie (Ziel %.0f%%)', $surplusW, $ctx['socTargetDay']);
                 return array('plan' => array('op' => EMS_OP_PV_SELFUSE, 'gw' => GW_MODE_CHARGE_PV, 'power' => 0,
                     'reason' => $reason, 'price' => $price, 'soc' => round($soc, 1)), 'soc' => $soc);
@@ -2161,7 +2174,15 @@ class EMS extends IPSModule
         // (keine doppelte Arbeit).
         $tomorrowJson   = $this->getPT15MTomorrowJson();
         $tomorrowPrices = $this->parsePT15M($tomorrowJson, 1);
-        $signature = date('Y-m-d') . '|' . md5(json_encode($prices) . '|' . json_encode($tomorrowPrices));
+
+        // Fahrzeug-Ladebedarf bei Heimkehr (Dietmars Schneeflocke/Philippsburg-
+        // Fund, 25.08.2026) -- muss ebenfalls Teil der Signatur sein, sonst
+        // loest ein Fahrzeug, das gerade den Heimweg antritt, keine
+        // Neuberechnung aus. Auf 0,1kWh gerundet, damit GPS-Rauschen bei
+        // distanceToHomeKm nicht bei jedem Tick eine Neuberechnung erzwingt.
+        $vehicleReserveKwh = $this->computeVehicleReserveKwh();
+        $signature = date('Y-m-d') . '|' . md5(json_encode($prices) . '|' . json_encode($tomorrowPrices)
+            . '|veh=' . round($vehicleReserveKwh, 1));
 
         if (!$force && $this->ReadAttributeString('DayPlanSignature') === $signature) {
             return 'ℹ️ Tagesplan unverändert (gleiche Preisdaten wie beim letzten Lauf) — keine Neuberechnung nötig.';
@@ -2262,6 +2283,17 @@ class EMS extends IPSModule
         );
 
         $expensiveReserve = $this->computeExpensiveReserveKwh($prices, $thDischarge, $avgHouseW);
+        if ($vehicleReserveKwh > 0.0) {
+            // Fahrzeug-Bedarf gilt HEUTE durchgehend (ab jetzt bis Tagesende),
+            // nicht nur in kuenftigen teuren Stunden -- das Auto soll bei
+            // Ankunft laden koennen, unabhaengig vom Preis in diesem Moment.
+            // Nur fuer den Heute-Plan, nicht fuer Morgen: sobald das
+            // Fahrzeug ankommt, aendert sich headingHome/die Signatur und
+            // der naechste Lauf rechnet ohne den Bonus neu.
+            for ($slot = 0; $slot < 96; $slot++) {
+                $expensiveReserve[$slot] += $vehicleReserveKwh;
+            }
+        }
 
         $plan = array();
         for ($slot = 0; $slot < 96; $slot++) {
@@ -2569,6 +2601,37 @@ class EMS extends IPSModule
             }
         }
         return $out;
+    }
+
+    /**
+     * Zusaetzlicher Reserve-Bedarf durch Fahrzeuge auf dem Heimweg (Dietmars
+     * Anforderung 25.08.2026, ausgeloest durch den Schneeflocke/Philippsburg-
+     * Fund: das aktuelle Navigationsziel faelschlich als Heimfahrt gedeutet).
+     * Nutzt TESSIE_GetVehicleState contractVersion 1.4
+     * (distanceToHomeKm/headingHome/expectedHomeArrivalSocPercent) --
+     * NUR uebernommen, wenn das Fahrzeug tatsaechlich Richtung Zuhause
+     * navigiert (headingHome===true), nicht bei irgendeinem anderen Ziel.
+     * Der Umkreis (VEH_Home_Radius_Km) ist bewusst eine EMS-eigene
+     * Geschaeftsregel ("gilt eine Rueckfahrt heute noch als plausibel?"),
+     * nicht Teil des Tessie-Vertrags.
+     */
+    private function computeVehicleReserveKwh()
+    {
+        $radiusKm = (float)$this->ReadPropertyInteger('VEH_Home_Radius_Km');
+        $partners = $this->GetPartners();
+        $total = 0.0;
+        foreach ((array)($partners['tessie'] ?? array()) as $veh) {
+            if (($veh['headingHome'] ?? false) !== true) { continue; }
+            $dist = $veh['distanceToHomeKm'] ?? null;
+            $arrivalSoc = $veh['expectedHomeArrivalSocPercent'] ?? null;
+            $limit = $veh['chargeLimit'] ?? null;
+            $capKwh = $veh['batteryCapacityKwh'] ?? null;
+            if ($dist === null || $arrivalSoc === null || $limit === null || $capKwh === null) { continue; }
+            if ($dist > $radiusKm) { continue; }
+            $neededPct = max(0.0, (float)$limit - (float)$arrivalSoc);
+            $total += $neededPct / 100.0 * (float)$capKwh;
+        }
+        return $total;
     }
 
     private function parsePT15M($json, int $dayOffset = 0)

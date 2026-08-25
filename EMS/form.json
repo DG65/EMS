@@ -563,6 +563,17 @@
                     "caption": "Grid Rewards Modus aktiv (Tibber steuert Wallbox, Batterie passiv)"
                 },
                 {
+                    "type": "NumberSpinner",
+                    "name": "VEH_Home_Radius_Km",
+                    "caption": "Heimfahrt-Umkreis (km) — Fahrzeug-Ladebedarf bei Rückkehr",
+                    "minimum": 0,
+                    "maximum": 2000
+                },
+                {
+                    "type": "Label",
+                    "caption": "Ist ein Fahrzeug (Tessie) laut Navigation auf dem Heimweg und die Entfernung liegt innerhalb dieses Umkreises, plant der Tagesplan den erwarteten Ladebedarf bei Ankunft mit ein (Batterie wird bevorzugt statt exportiert). Außerhalb des Umkreises wird angenommen, dass heute keine Rückkehr mehr erfolgt."
+                },
+                {
                     "type": "Label",
                     "caption": "── 🚀 Batterie-Boost (manuell, für schnelles Nachladen) ─"
                 },

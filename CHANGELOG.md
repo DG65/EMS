@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.24.0 (2026-08-25)
+- **Neu: Fahrzeug-Ladebedarf bei Heimkehr fließt in den Tagesplan ein.**
+  Auslöser: Dietmar bat mich, den SOC von "Schneeflocke" bei Ankunft
+  vorherzusagen — ich interpretierte dabei fälschlich das aktuelle
+  Navigationsziel ("Philippsburg") als Heimfahrt. Tessie hat daraufhin
+  `TESSIE_GetVehicleState` auf **contractVersion 1.4** erweitert
+  (`distanceToHomeKm`, `headingHome`, `expectedHomeArrivalSocPercent` —
+  Letzteres nur gesetzt, wenn tatsächlich Richtung Zuhause navigiert wird).
+  Neue `computeVehicleReserveKwh()`: summiert über alle Tessie-Fahrzeuge
+  den erwarteten Ladebedarf (Ladelimit − Ankunfts-SOC-Prognose) × Batterie-
+  kapazität, aber nur für Fahrzeuge, die laut `headingHome` tatsächlich
+  heimwärts fahren UND innerhalb des neuen konfigurierbaren Umkreises
+  `VEH_Home_Radius_Km` (Default 200 km) liegen — reine EMS-Geschäftsregel
+  ("gilt eine Rückfahrt heute noch als plausibel?"), bewusst nicht Teil des
+  Tessie-Vertrags. Der Bedarf wird wie die Preis-Reserve behandelt (erhöht
+  `effectiveTargetDay`, PV lädt bevorzugt statt zu exportieren) — ist damit
+  automatisch Teil der Cache-Signatur, ein startender Heimweg löst also
+  zuverlässig eine Neuberechnung aus.
+
 ## 0.23.7 (2026-08-25)
 - **Fix: Preis-Entladen-Zweig blockierte die Entladung komplett statt sie zu
   erlauben.** Live-Fund über InverterHubs Rückfrage (`ctl_ems_mode=Entladen+
