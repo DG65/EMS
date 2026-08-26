@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.24.1 (2026-08-25)
+- **Neu: Rechnungsprüfung, Ist-Seite.** Auslöser: Dietmar wollte eine
+  Rechnungsprüfung, hatte dazu eine Original-Tibber-Rechnung hochgeladen —
+  die Datei ging in einer früheren, zusammengefassten Sitzungsphase verloren
+  (bei keinem Verbund-Modul eine Kopie gefunden), Dashboard hatte aber
+  parallel 3 echte Rechnungen bekommen und den Aufbau mitgeteilt (Verbrauchs-
+  kosten, Grundgebühr inkl. §14a-Reduktion, zwei Grid-Rewards-Zeilen,
+  Kampagnen, periodenübergreifende Gutschrift-Verrechnung). Entscheidung
+  (Dietmar, Option 3 von dreien): **kein PDF-Parsing** — zu fehleranfällig
+  bei Layoutänderungen. Stattdessen drei neue WebFront-Eingabefelder
+  (`INVOICE_Ist_Betrag`/`INVOICE_Ist_MwSt`/`INVOICE_Ist_Gutschrift`, direkt
+  im WebFront nutzbar nach dem SUITE.md-Punkt-10-Muster von heute:
+  `RegisterVariableFloat`+`EnableAction`, nicht Property+Konsolenformular).
+  Neues `EMS_GetInvoiceCheck($year=0, $month=0)` (contractVersion 1.0) für
+  Dashboard, liefert die eingetragenen Ist-Werte für den Monat.
+  **Soll-Seite noch offen:** braucht historische Preiskomponenten von Tibber
+  Grid Reward, die deren aktueller Vertrag (`TIBBERGR_GetPriceCurve`, nur
+  heute+morgen) nicht liefert — separat anzufragen, bevor `soll`/`abweichung`
+  additiv ergänzt werden können.
+
 ## 0.24.0 (2026-08-25)
 - **Neu: Fahrzeug-Ladebedarf bei Heimkehr fließt in den Tagesplan ein.**
   Auslöser: Dietmar bat mich, den SOC von "Schneeflocke" bei Ankunft

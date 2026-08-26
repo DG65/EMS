@@ -275,12 +275,29 @@ class EMS extends IPSModule
         $this->RegisterVariableString( 'EMS_LastAction',   'Letzte Aktion',          '',120);
         $this->RegisterVariableString( 'EMS_Status',       'Status',                 '',130);
 
+        // Rechnungsprüfung (25.08.2026, Dietmars Vorgabe): KEIN PDF-Parsing
+        // (Option 3 -- zu fehleranfaellig bei Layoutaenderungen, siehe
+        // Diskussion mit Dashboard/Tibber Grid Reward/MeterHub) -- Dietmar
+        // traegt die wenigen Ist-Werte der monatlichen Tibber-Rechnung von
+        // Hand ein, direkt im WebFront (SUITE.md-Punkt-10-Muster: echte
+        // Variablen + EnableAction statt Konsolenformular). Soll-Berechnung
+        // (Verbrauch x historische Preiskomponenten) folgt separat, sobald
+        // Tibber Grid Reward eine Preis-Archivfunktion liefert -- siehe
+        // computeInvoiceSollForMonth()-Kommentar.
+        $this->RegisterVariableFloat('INVOICE_Ist_Betrag',    'Rechnung: Ist-Endbetrag (EUR)',        '', 140);
+        $this->RegisterVariableFloat('INVOICE_Ist_MwSt',      'Rechnung: davon MwSt (EUR)',            '', 141);
+        $this->RegisterVariableFloat('INVOICE_Ist_Gutschrift','Rechnung: Erstattung/Gutschrift (EUR)', '', 142);
+
         $this->EnableAction('EMS_GridRewards');
+        $this->EnableAction('INVOICE_Ist_Betrag');
+        $this->EnableAction('INVOICE_Ist_MwSt');
+        $this->EnableAction('INVOICE_Ist_Gutschrift');
 
         // ── Timer ───────────────────────────────────────────────────
         $this->RegisterTimer('EMS_UpdateTimer', 0, 'EMS_Update($_IPS[\'TARGET\']);');
 
         // ── Interne Attribute ───────────────────────────────────────
+        $this->RegisterAttributeString('InvoiceHistory', '{}'); // JSON, Key "YYYY-MM"
         $this->RegisterAttributeInteger('LastGoodweMode',    GW_MODE_AUTO);
         $this->RegisterAttributeBoolean('LastGoodweEnable',  true);
         $this->RegisterAttributeInteger('LastWB1Switch',     0);
@@ -2069,7 +2086,64 @@ class EMS extends IPSModule
             $this->SetValue('EMS_GridRewards', (bool)$value);
             $this->emsLog(EMS_LOG_BASIC, 'Grid Rewards ' . ($value ? 'aktiviert' : 'deaktiviert'));
             $this->Update();
+            return;
         }
+        if (in_array($ident, array('INVOICE_Ist_Betrag', 'INVOICE_Ist_MwSt', 'INVOICE_Ist_Gutschrift'), true)) {
+            // Direkte WebFront-Eingabe der monatlichen Tibber-Rechnung
+            // (Dietmars Vorgabe 25.08.2026: kein PDF-Parsing, Option 3).
+            // SetValue() selbst ist bereits die sichtbare Rueckmeldung (der
+            // Wert erscheint sofort im WebFront) -- kein zusaetzliches Echo
+            // noetig, siehe SUITE.md "Sichtbare Rueckmeldung", Muster 3.
+            $this->SetValue($ident, (float)$value);
+            $this->saveInvoiceMonth();
+            return;
+        }
+    }
+
+    /**
+     * Schreibt die drei aktuellen INVOICE_Ist_*-Werte in die Monatshistorie
+     * (Attribut InvoiceHistory, JSON keyed "YYYY-MM"). Wird bei jeder
+     * Aenderung eines der drei Werte aufgerufen -- so ist immer der zuletzt
+     * eingetragene Stand fuer den aktuellen Kalendermonat gesichert, auch
+     * wenn Dietmar die drei Felder nacheinander statt gleichzeitig ausfuellt.
+     */
+    private function saveInvoiceMonth()
+    {
+        $key = date('Y-m');
+        $history = json_decode($this->ReadAttributeString('InvoiceHistory'), true);
+        if (!is_array($history)) { $history = array(); }
+        $history[$key] = array(
+            'betrag'     => $this->GetValue('INVOICE_Ist_Betrag'),
+            'mwst'       => $this->GetValue('INVOICE_Ist_MwSt'),
+            'gutschrift' => $this->GetValue('INVOICE_Ist_Gutschrift'),
+            'savedAt'    => time(),
+        );
+        $this->WriteAttributeString('InvoiceHistory', json_encode($history));
+    }
+
+    /**
+     * Rechnungsprüfung, Ist-Seite (Soll-Seite folgt separat -- siehe
+     * Kommentar bei den INVOICE_-Statusvariablen: braucht historische
+     * Preiskomponenten von Tibber Grid Reward, die deren aktueller Vertrag
+     * TIBBERGR_GetPriceCurve() nicht liefert, nur heute+morgen). Liefert die
+     * fuer $year/$month manuell eingetragenen Ist-Werte, Default = aktueller
+     * Monat. contractVersion '1.0' -- fuer Dashboard, sobald die Soll-Seite
+     * steht, additiv um 'soll'/'abweichung' erweiterbar.
+     */
+    public function GetInvoiceCheck($year = 0, $month = 0)
+    {
+        $year  = $year > 0 ? $year : (int)date('Y');
+        $month = $month > 0 ? $month : (int)date('n');
+        $key = sprintf('%04d-%02d', $year, $month);
+        $history = json_decode($this->ReadAttributeString('InvoiceHistory'), true);
+        $entry = (is_array($history) && isset($history[$key])) ? $history[$key] : null;
+        return array(
+            'contractVersion' => '1.0',
+            'year'            => $year,
+            'month'           => $month,
+            'ist'             => $entry,
+            'soll'            => null, // noch nicht verfuegbar, siehe Kommentar oben
+        );
     }
 
     /**
