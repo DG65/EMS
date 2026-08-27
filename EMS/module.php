@@ -1692,16 +1692,39 @@ class EMS extends IPSModule
         $baseToday    = strtotime('today');
         $baseTomorrow = strtotime('tomorrow');
         foreach ($today as $slot => $entry) {
-            $entry['time'] = $baseToday + $slot * 900;
+            $entry['time'] = $this->slotTimestamp($baseToday, $slot);
             if (isset($entry['price']) && $entry['price'] !== null) { $entry['price'] = round($entry['price'] * 100, 2); }
             $out[] = $entry;
         }
         foreach ($tomorrow as $slot => $entry) {
-            $entry['time'] = $baseTomorrow + $slot * 900;
+            $entry['time'] = $this->slotTimestamp($baseTomorrow, $slot);
             if (isset($entry['price']) && $entry['price'] !== null) { $entry['price'] = round($entry['price'] * 100, 2); }
             $out[] = $entry;
         }
         return array('contractVersion' => '1.0', 'priceUnit' => 'ct/kWh', 'slots' => $out);
+    }
+
+    /**
+     * Zeitstempel eines Viertelstunden-Slots (0-95) fuer einen gegebenen Tag,
+     * ueber echte Wanduhrzeit (mktime), NICHT ueber $dayTimestamp + $slot*900.
+     * Live-Fund (Dashboard, verbundweite Sommer-/Winterzeit-Pruefung,
+     * 25.08.2026): feste 900s-Schritte gehen von "ein Tag = 86400s" aus --
+     * an DST-Uebergangstagen (23h im Maerz, 25h im Oktober) verrutscht die
+     * Slot-zu-Uhrzeit-Zuordnung dadurch (letzte Slots faelschlich schon im
+     * naechsten Tag, bzw. die letzte reale Stunde im Oktober fehlt ganz).
+     * mktime() konstruiert stattdessen die tatsaechliche Wanduhrzeit fuer das
+     * Kalenderdatum aus $dayTimestamp und loest DST dabei korrekt auf.
+     */
+    private function slotTimestamp($dayTimestamp, $slot)
+    {
+        return mktime(
+            intdiv($slot, 4),
+            ($slot % 4) * 15,
+            0,
+            (int)date('n', $dayTimestamp),
+            (int)date('j', $dayTimestamp),
+            (int)date('Y', $dayTimestamp)
+        );
     }
 
     /**
@@ -1906,7 +1929,7 @@ class EMS extends IPSModule
         $midnight = strtotime('tomorrow midnight');
         foreach ($mean as $i => $w) {
             if ($w >= $floor) {
-                return $midnight + $i * 900; // 96 Slots a 15 Min
+                return $this->slotTimestamp($midnight, $i); // DST-sicher, siehe slotTimestamp()
             }
         }
         return 0;

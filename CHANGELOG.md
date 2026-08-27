@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.24.2 (2026-08-25)
+- **Fix: Sommer-/Winterzeit-Bug bei der Slot-zu-Uhrzeit-Zuordnung.**
+  Verbundweite Prüfung, von Dashboard/Dietmar angestoßen. `GetDayPlan()`s
+  Slot→Zeitstempel-Mapping und `getPvStartTomorrowTs()` gingen von "1 Tag =
+  86400 Sekunden" aus (`$baseToday + $slot*900`) — an den zwei DST-
+  Übergangstagen (23h im März, 25h im Oktober) hätte das die letzten Slots
+  auf falsche Zeitstempel gelegt bzw. eine reale Stunde im Oktober gar nicht
+  abgebildet. Betraf nur Anzeige (Dashboard-Diagramm)/PV-Start-Berechnung,
+  nicht die Preis-Entscheidungslogik selbst (die filtert über
+  Kalenderdatum-Strings, nicht über Sekundenarithmetik). Neue
+  `slotTimestamp()`-Hilfsfunktion nutzt `mktime()` (echte Wanduhrzeit,
+  DST-sicher) statt fester Sekundenaddition.
+
 ## 0.24.1 (2026-08-25)
 - **Neu: Rechnungsprüfung, Ist-Seite.** Auslöser: Dietmar wollte eine
   Rechnungsprüfung, hatte dazu eine Original-Tibber-Rechnung hochgeladen —
