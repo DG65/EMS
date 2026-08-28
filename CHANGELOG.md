@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.25.2 (2026-08-28)
+- **Fix: Wallboxen blieben nach Aufhebung der §14a-Lastbegrenzung dauerhaft
+  gesperrt (bei EMS_Active=false).** Zweiter Live-Testlauf sofort nach
+  0.25.1 zeigte: die Zwangsabschaltung hatte keine Gegenseite — sobald
+  `loadDimmActive` wieder auf `false` ging, passierte nichts, die
+  Wallboxen blieben für immer aus, solange EMS deaktiviert ist. Neues
+  Attribut `SteuerboxLoadLimitSetByUs` (analog zum bestehenden
+  Einspeisereduktions-Flag): Wallboxen werden nur wieder freigegeben,
+  wenn EMS sie selbst gesperrt hatte — eine vom Nutzer manuell gesetzte
+  Ladefreigabe=Aus bleibt unangetastet.
+
 ## 0.25.1 (2026-08-28)
 - **Fix: §14a-Lastbegrenzung bei EMS_Active=false schaltete die Wallboxen
   gar nicht ab.** Live-Test gegen SteuerboxHubs Testinstanz sofort nach dem

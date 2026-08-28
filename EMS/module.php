@@ -302,6 +302,7 @@ class EMS extends IPSModule
         // ── Interne Attribute ───────────────────────────────────────
         $this->RegisterAttributeString('InvoiceHistory', '{}'); // JSON, Key "YYYY-MM"
         $this->RegisterAttributeBoolean('SteuerboxFeedInLimitSetByUs', false);
+        $this->RegisterAttributeBoolean('SteuerboxLoadLimitSetByUs', false);
         $this->RegisterAttributeInteger('LastGoodweMode',    GW_MODE_AUTO);
         $this->RegisterAttributeBoolean('LastGoodweEnable',  true);
         $this->RegisterAttributeInteger('LastWB1Switch',     0);
@@ -736,7 +737,8 @@ class EMS extends IPSModule
         try {
             $this->applySteuerboxFeedInLimit();
             $steuerbox = $this->getSteuerboxState();
-            if ($steuerbox !== null && ($steuerbox['loadDimmActive'] ?? false) && !$this->ReadPropertyBoolean('EMS_Active')) {
+            $loadDimmActive = ($steuerbox !== null) && ($steuerbox['loadDimmActive'] ?? false);
+            if ($loadDimmActive && !$this->ReadPropertyBoolean('EMS_Active')) {
                 // controlWallbox() statt setAllWallboxes(): Live-Fund
                 // 28.08.2026 -- setAllWallboxes() bedient NUR die alte
                 // direkte go-e-Property (WB{n}_Instance), bei Dietmars
@@ -747,7 +749,20 @@ class EMS extends IPSModule
                 // Direkt-Property zurueck (siehe dortige Implementierung).
                 $this->controlWallbox(1, false);
                 $this->controlWallbox(2, false);
+                $this->WriteAttributeBoolean('SteuerboxLoadLimitSetByUs', true);
                 $this->emsLog(EMS_LOG_BASIC, '⚡ §14a-Lastbegrenzung aktiv (EMS inaktiv): Wallboxen zwangsabgeschaltet');
+            } elseif (!$loadDimmActive && !$this->ReadPropertyBoolean('EMS_Active')
+                && $this->ReadAttributeBoolean('SteuerboxLoadLimitSetByUs')) {
+                // Live-Fund 28.08.2026 (zweiter Testlauf): Aufhebung fehlte
+                // komplett -- Wallboxen blieben nach Ende der Vorgabe fuer
+                // immer aus, solange EMS inaktiv ist. Nur wieder freigeben,
+                // wenn WIR die Sperre gesetzt hatten (Attribut-Flag), damit
+                // eine vom Nutzer manuell gesetzte Ladefreigabe=Aus nicht
+                // grundlos ueberschrieben wird.
+                $this->controlWallbox(1, true);
+                $this->controlWallbox(2, true);
+                $this->WriteAttributeBoolean('SteuerboxLoadLimitSetByUs', false);
+                $this->emsLog(EMS_LOG_BASIC, '⚡ §14a-Lastbegrenzung aufgehoben (EMS inaktiv): Wallboxen wieder freigegeben');
             }
         } catch (Throwable $e) {
             $this->emsLog(EMS_LOG_BASIC, '§14a-Steuerbox-Fehler (Ausführung läuft unbeeinflusst weiter): ' . $e->getMessage());
