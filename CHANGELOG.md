@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.25.0 (2026-08-28)
+- **Neu: §14a-Netzbetreiber-Dimmung (SteuerboxHub, `SBH_GetState`) wird
+  konsumiert.** War architektonisch seit Wochen als "oberste Priorität"
+  vorgesehen (siehe SUITE.md "§14a-Lastabwurf-Priorisierung"), aber nie
+  tatsächlich gebaut — SteuerboxHub ist jetzt live an einer Testinstanz
+  (Dummy-Kontakte), Auslöser für den Bau.
+  - `loadDimmActive`: neue oberste Priorität in `optimize()`, noch vor Grid
+    Rewards — schaltet alle Wallboxen ab, WR auf Automatik (kein aktiver
+    Netzbezugs-Sollwert), damit EMS die Vorgabe nicht selbst konterkariert.
+  - `feedInDimmActive`: neue `applySteuerboxFeedInLimit()`, nutzt die
+    InverterHub-Einspeisegrenzen-Idents (`ctl_export_enable`/
+    `ctl_export_limit`) — ein eigener Kanal, unabhängig von `ctl_ems_mode`/
+    `-power`. Hebt die Grenze nur auf, wenn sie zuletzt von uns selbst
+    gesetzt wurde (Attribut-Flag), um eine manuell vom Nutzer gesetzte
+    Grenze nicht grundlos wegzunehmen.
+  - **Beide laufen bewusst UNABHÄNGIG von `EMS_Active`** (wie schon
+    `BuildDayPlan()`) — eine Gesetz-/Netzbetreiber-Vorgabe darf nicht davon
+    abhängen, ob die EMS-Preisoptimierung gerade läuft.
+  - `function_exists`-abgesichert, liefert `null` statt stillschweigend
+    `false` vorzutäuschen, wenn SteuerboxHub nicht installiert ist.
+
 ## 0.24.2 (2026-08-25)
 - **Fix: Sommer-/Winterzeit-Bug bei der Slot-zu-Uhrzeit-Zuordnung.**
   Verbundweite Prüfung, von Dashboard/Dietmar angestoßen. `GetDayPlan()`s

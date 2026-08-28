@@ -63,6 +63,9 @@ define('GUID_PVFORECAST', '{257DD4E8-9705-462E-89FC-56D0A1038353}');
 // fuer ein beliebiges Zeitfenster) -- fuer das dynamische, energiebasierte
 // Batterie-Tagesziel, siehe getDynamicSocTargetDay().
 define('GUID_LFC', '{DC5AD508-507F-40EA-8630-0959AED83050}');
+// SteuerboxHub (SBH_GetState-Vertrag: §14a-Netzbetreiber-Dimmung, oberste
+// Prioritaet -- siehe SUITE.md "§14a-Lastabwurf-Priorisierung")
+define('GUID_STEUERBOXHUB', '{B76BE0BA-DF99-4B81-81BD-636A610011EE}');
 
 // Tile Visualization (WebFront-Kachelseite) -- fuer WFC_PushNotification()
 // Ziel-InstanceID. NIEMALS hart hinterlegen (Grundregel "keine eigene Anlage
@@ -298,6 +301,7 @@ class EMS extends IPSModule
 
         // ── Interne Attribute ───────────────────────────────────────
         $this->RegisterAttributeString('InvoiceHistory', '{}'); // JSON, Key "YYYY-MM"
+        $this->RegisterAttributeBoolean('SteuerboxFeedInLimitSetByUs', false);
         $this->RegisterAttributeInteger('LastGoodweMode',    GW_MODE_AUTO);
         $this->RegisterAttributeBoolean('LastGoodweEnable',  true);
         $this->RegisterAttributeInteger('LastWB1Switch',     0);
@@ -718,6 +722,25 @@ class EMS extends IPSModule
             $this->BuildDayPlan(false);
         } catch (Throwable $e) {
             $this->emsLog(EMS_LOG_BASIC, 'Tagesplan-Fehler (Ausfuehrung laeuft unbeeinflusst weiter): ' . $e->getMessage());
+        }
+
+        // §14a-Netzbetreiber-Dimmung (SteuerboxHub) läuft ebenfalls
+        // UNABHÄNGIG von EMS_Active — eine Gesetz-/Netzbetreiber-Vorgabe darf
+        // nicht davon abhängen, ob die EMS-Preisoptimierung gerade an ist
+        // (siehe CLAUDE.md-Prioritätshierarchie: Gesetz/Netzbetreiber steht
+        // über allem, auch über "EMS ist gerade aus"). Einspeisereduktion
+        // nutzt applySteuerboxFeedInLimit() (dieselbe Funktion wie im
+        // aktiven Pfad); Lastbegrenzung schaltet hier direkt die Wallboxen
+        // ab, da optimize()/applyDecision() bei EMS_Active=false nicht
+        // laufen.
+        try {
+            $this->applySteuerboxFeedInLimit();
+            $steuerbox = $this->getSteuerboxState();
+            if ($steuerbox !== null && ($steuerbox['loadDimmActive'] ?? false) && !$this->ReadPropertyBoolean('EMS_Active')) {
+                $this->setAllWallboxes(false);
+            }
+        } catch (Throwable $e) {
+            $this->emsLog(EMS_LOG_BASIC, '§14a-Steuerbox-Fehler (Ausführung läuft unbeeinflusst weiter): ' . $e->getMessage());
         }
 
         if (!$this->ReadPropertyBoolean('EMS_Active')) {
@@ -1141,6 +1164,59 @@ class EMS extends IPSModule
         }
 
         return null;
+    }
+
+    /**
+     * §14a-Netzbetreiber-Dimmungssignal (SteuerboxHub, SBH_GetState).
+     * function_exists-abgesichert (SteuerboxHub ist optional, kein Modul
+     * darf ein anderes voraussetzen) -- liefert null, wenn nicht installiert
+     * oder der Aufruf fehlschlaegt, NIE stillschweigend false/0 vortaeuschen.
+     */
+    private function getSteuerboxState()
+    {
+        if (!function_exists('SBH_GetState')) { return null; }
+        $list = @IPS_GetInstanceListByModuleID(GUID_STEUERBOXHUB);
+        if (empty($list)) { return null; }
+        $raw = @SBH_GetState($list[0]);
+        $state = is_string($raw) ? json_decode($raw, true) : $raw;
+        return is_array($state) ? $state : null;
+    }
+
+    /**
+     * Setzt/hebt die WR-Einspeisegrenze (ctl_export_enable/ctl_export_limit)
+     * nach SteuerboxHubs feedInDimmActive/feedInLimitPercent durch. Eigener
+     * Kanal, unabhaengig von ctl_ems_mode/-power (siehe SUITE.md GoodWe-
+     * Steuerregister) -- eine reine PV-Erzeugungsdrosselung, keine Batterie-
+     * Steuerung, deshalb hier separat statt ueber $d im normalen
+     * optimize()/applyDecision()-Fluss.
+     */
+    private function applySteuerboxFeedInLimit()
+    {
+        $steuerbox = $this->getSteuerboxState();
+        $active = ($steuerbox !== null) && ($steuerbox['feedInDimmActive'] ?? false);
+        $inv = $this->getInverterEntry();
+        if ($inv === null || ($inv['instanceID'] ?? 0) <= 0) { return; }
+        $invId = $inv['instanceID'];
+
+        if (!$active) {
+            // Keine Vorgabe (mehr) aktiv -- Begrenzung aufheben, falls sie
+            // zuletzt von UNS gesetzt wurde (Attribut-Flag, damit wir nicht
+            // eine vom Nutzer manuell gesetzte Grenze grundlos wegnehmen).
+            if ($this->ReadAttributeBoolean('SteuerboxFeedInLimitSetByUs')) {
+                @IPS_RequestAction($invId, 'ctl_export_enable', false);
+                $this->WriteAttributeBoolean('SteuerboxFeedInLimitSetByUs', false);
+                $this->emsLog(EMS_LOG_BASIC, '⚡ §14a-Einspeisereduktion aufgehoben');
+            }
+            return;
+        }
+
+        $percent = max(0.0, min(100.0, (float)($steuerbox['feedInLimitPercent'] ?? 100)));
+        $maxW    = (float)$this->ReadPropertyInteger('EMS_Max_Power_W');
+        $limitW  = (int)round($maxW * $percent / 100.0);
+        @IPS_RequestAction($invId, 'ctl_export_enable', true);
+        @IPS_RequestAction($invId, 'ctl_export_limit', $limitW);
+        $this->WriteAttributeBoolean('SteuerboxFeedInLimitSetByUs', true);
+        $this->emsLog(EMS_LOG_BASIC, sprintf('⚡ §14a-Einspeisereduktion aktiv: %.0f%% = %dW', $percent, $limitW));
     }
 
     /**
@@ -3024,6 +3100,34 @@ class EMS extends IPSModule
             'reason'     => '',
         );
 
+        // ── §14a-Netzbetreiber-Dimmung (SteuerboxHub, SBH_GetState) ─────
+        // Oberste Prioritaet ueberhaupt (Gesetz/Netzbetreiber vor Vermarkter
+        // vor EMS-Optimierung, siehe CLAUDE.md-Prioritaetshierarchie) --
+        // ausdruecklich VOR Grid Rewards geprueft. loadDimmActive: das
+        // Netzbetreiber-Signal begrenzt steuerbare Verbrauchseinrichtungen
+        // auf $loadPMin kW -- EMS' einzige direkt steuerbare Last sind die
+        // Wallboxen, die werden deshalb komplett abgeschaltet; der WR selbst
+        // wird auf Automatik (kein aktiver Netzbezugs-Sollwert) gestellt,
+        // damit EMS nicht zusaetzlich Netzladung befiehlt und die Vorgabe
+        // konterkariert. feedInDimmActive (Einspeisereduktion) wird separat
+        // in applyDecision() ueber die InverterHub-Einspeisegrenzen-Idents
+        // durchgesetzt (ctl_export_enable/ctl_export_limit), da $d dafuer
+        // keinen eigenen Kanal hat.
+        $steuerbox = $this->getSteuerboxState();
+        if ($steuerbox !== null && ($steuerbox['loadDimmActive'] ?? false)) {
+            $d['op_mode']    = EMS_OP_AUTO;
+            $d['gw_mode']    = GW_MODE_AUTO;
+            $d['gw_power_w'] = 0;
+            $d['gw_enable']  = false;
+            $d['wb1_enable'] = false;
+            $d['wb2_enable'] = false;
+            $d['reason']     = sprintf(
+                '⚡ §14a-Lastbegrenzung aktiv (Netzbetreiber): Wallboxen aus, max. %.1f kW',
+                (float)($steuerbox['loadPMin'] ?? 0)
+            );
+            return $d;
+        }
+
         // ── Grid Rewards ─────────────────────────────────────────────
         // Tibber steuert Wallbox direkt. Batterie darf weder laden noch
         // entladen. Der Goodwe importiert nur so viel wie die Wallboxen
@@ -3234,6 +3338,11 @@ class EMS extends IPSModule
 
     private function applyDecision($d, $s)
     {
+        // §14a-Einspeisereduktion (SteuerboxHub) wird bereits in Update()
+        // UNABHAENGIG von EMS_Active durchgesetzt (applySteuerboxFeedInLimit()),
+        // damit die Netzbetreiber-Vorgabe auch bei deaktiviertem EMS gilt --
+        // hier kein zweiter Aufruf noetig, der Cooldown/Moduswechsel-
+        // Mechanismus unten betrifft ohnehin nur ctl_ems_mode/-power.
         $lastMode     = $this->ReadAttributeInteger('LastGoodweMode');
         $lastEnable   = $this->ReadAttributeBoolean('LastGoodweEnable');
         $cooldown     = $this->ReadPropertyInteger('OPT_Cooldown_Sec');
