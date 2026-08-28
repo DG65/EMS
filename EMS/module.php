@@ -737,7 +737,17 @@ class EMS extends IPSModule
             $this->applySteuerboxFeedInLimit();
             $steuerbox = $this->getSteuerboxState();
             if ($steuerbox !== null && ($steuerbox['loadDimmActive'] ?? false) && !$this->ReadPropertyBoolean('EMS_Active')) {
-                $this->setAllWallboxes(false);
+                // controlWallbox() statt setAllWallboxes(): Live-Fund
+                // 28.08.2026 -- setAllWallboxes() bedient NUR die alte
+                // direkte go-e-Property (WB{n}_Instance), bei Dietmars
+                // Anlage sind WB1_Instance/WB2_Instance aber 0 (Wallboxen
+                // laufen ueber ChargerHub) -- setAllWallboxes() haette also
+                // still gar nichts abgeschaltet. controlWallbox() prueft
+                // zuerst ChargerHub, faellt erst danach auf die alte
+                // Direkt-Property zurueck (siehe dortige Implementierung).
+                $this->controlWallbox(1, false);
+                $this->controlWallbox(2, false);
+                $this->emsLog(EMS_LOG_BASIC, '⚡ §14a-Lastbegrenzung aktiv (EMS inaktiv): Wallboxen zwangsabgeschaltet');
             }
         } catch (Throwable $e) {
             $this->emsLog(EMS_LOG_BASIC, '§14a-Steuerbox-Fehler (Ausführung läuft unbeeinflusst weiter): ' . $e->getMessage());

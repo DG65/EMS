@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.25.1 (2026-08-28)
+- **Fix: §14a-Lastbegrenzung bei EMS_Active=false schaltete die Wallboxen
+  gar nicht ab.** Live-Test gegen SteuerboxHubs Testinstanz sofort nach dem
+  0.25.0-Release: `setAllWallboxes()` bedient nur die alte direkte
+  go-e-Property (`WB1_Instance`/`WB2_Instance`), die bei Dietmars Anlage
+  beide 0 sind (Wallboxen laufen über ChargerHub). Der unconditional
+  §14a-Pfad in `Update()` nutzt jetzt `controlWallbox(1/2, false)` (prüft
+  zuerst ChargerHub, fällt erst danach auf die alte Property zurück) —
+  derselbe Pfad, den `applyDecision()` im aktiven EMS-Betrieb ohnehin nutzt.
+
 ## 0.25.0 (2026-08-28)
 - **Neu: §14a-Netzbetreiber-Dimmung (SteuerboxHub, `SBH_GetState`) wird
   konsumiert.** War architektonisch seit Wochen als "oberste Priorität"
