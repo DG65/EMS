@@ -28,6 +28,7 @@ jobs:
           - NRGDashboard
           - NRGPrognose
           - NRGSteuerboxHub
+          - NRGStrukturHub
           - NRGStromGedachtWidget
           - NRGSzenariorechner
           - NRGTibberGridRewards
