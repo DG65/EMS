@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.26.1 (2026-08-29)
+- **Fix: Szenario B des Totmann-Fallbacks war falsch beschriftet/unwirksam.**
+  Dietmars Korrektur, direkt nach 0.26.0: Die Annahme "`ctl_ems_enable=false`
+  → WR ignoriert `ctl_ems_mode`/`-power`, fährt eigene Selbstverbrauchslogik"
+  (Fund 25.07.2026) ist FALSCH — sauberer A/B-Test zeigt: bei `enable=false`
+  wird der zuletzt kommandierte Modus dauerhaft AUSGEFÜHRT, ohne Heartbeat.
+  `enable=false` allein friert also nur ein, was gerade lief, statt in
+  Automatik zurückzufallen. `handleGoodweDeadman()`-Szenario B und der
+  `EMS_Active=false`-Pfad senden jetzt explizit `enable=false` **+**
+  `mode=1` (Automatik) **+** `power=0` zusammen, statt nur `enable=false`.
+  SUITE.md/CLAUDE.md entsprechend zweifach korrigiert (auch die
+  `ctl_ems_enable`-Grundsemantik selbst war missverständlich dokumentiert).
+
 ## 0.26.0 (2026-08-29)
 - **Neu: WR-Totmann-Erkennung + -Reaktion, EMS ist ab sofort alleiniger
   Regler.** Architektur-Übergabe von InverterHub (0.75.0-beta.1): InverterHub

@@ -855,10 +855,22 @@ class EMS extends IPSModule
             // aktiv auf false gesetzt sein -- kein "3rd party EMS"-Anspruch
             // ohne tatsaechlich aktive Steuerung. Reasserted bei jedem
             // Zyklus (billig, sicher), nicht nur beim Uebergang.
+            //
+            // mode=Automatik/power=0 werden bewusst MIT gesendet (Dietmars
+            // Praezisierung, "das waere vermutlich am sichersten, man weiss
+            // ja nie wer am Geraet rumschaltet"): enable=false allein wuerde
+            // nur den ZULETZT kommandierten Modus dauerhaft einfrieren (s.
+            // handleGoodweDeadman()-Kommentar), nicht in echte Automatik
+            // zurueckfallen -- bei deaktiviertem EMS soll die Anlage aber
+            // garantiert in echter Automatik landen, unabhaengig davon, was
+            // zuletzt (auch von fremder Hand, z.B. SEMS+-App) kommandiert
+            // wurde.
             try {
                 $inv = $this->getInverterEntry();
                 if ($inv !== null && ($inv['instanceID'] ?? 0) > 0) {
                     @IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', false);
+                    @IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', GW_MODE_AUTO);
+                    @IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', 0);
                 }
             } catch (Throwable $e) {
                 $this->emsLog(EMS_LOG_BASIC, 'ctl_ems_enable=false-Fehler (EMS inaktiv): ' . $e->getMessage());
@@ -1355,8 +1367,21 @@ class EMS extends IPSModule
         $reaction = $this->ReadPropertyInteger('WATCHDOG_Deadman_Reaction');
         if ($reaction === 1) {
             // Szenario B: Fallback in WR-Eigenregelung.
+            //
+            // Live-Fund 29.08.2026 (Dietmar, nach dem A/B-Test): bei
+            // enable=false haelt der WR den ZULETZT KOMMANDIERTEN Modus
+            // dauerhaft, OHNE Heartbeat -- er faellt NICHT von selbst in
+            // Automatik zurueck, nur weil enable auf false gesetzt wird.
+            // enable=false ALLEIN wuerde also einfrieren, was gerade lief
+            // (z.B. eine Entladung), nicht in Automatik zurueckfallen.
+            // Fuer echte Automatik-Uebergabe muss deshalb explizit
+            // enable=false + mode=1 (Automatik) + power=0 gesendet werden --
+            // korrigiert die urspruengliche (falsche) Annahme, enable=false
+            // allein reiche fuer "WR faehrt eigene Selbstverbrauchslogik".
             @IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', false);
-            $this->emsLog(EMS_LOG_BASIC, '↩️ Totmann-Reaktion: Fallback in WR-Eigenregelung (ctl_ems_enable=false).');
+            @IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', GW_MODE_AUTO);
+            @IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', 0);
+            $this->emsLog(EMS_LOG_BASIC, '↩️ Totmann-Reaktion: Fallback in WR-Eigenregelung (enable=false, mode=Automatik, power=0).');
         } else {
             $this->emsLog(EMS_LOG_BASIC, 'ℹ️ Totmann-Reaktion: Sicherheits-Stopp respektiert, keine weitere Aktion (Szenario A).');
         }
@@ -3619,17 +3644,27 @@ class EMS extends IPSModule
                 // IPS_RequestAction($InstanceID, $Ident, $Value) (siehe ChargerHub-Befund
                 // 25.07.2026, gleiche Ursache bei InverterHub).
                 //
-                // ctl_ems_enable (Register 47505) ist der Hauptschalter. Zwei
-                // gegenlaeufige, beide live bestaetigte Effekte:
-                // - =false: Goodwe ignoriert ctl_ems_mode/ctl_ems_power komplett und
-                //   faehrt seine eigene Selbstverbrauchslogik (Fund 25.07.2026).
-                // - =true: SEMS+-Portal zeigt "3rd party EMS", der WR uebergibt die
-                //   GESAMTE Entscheidungshoheit an uns -- "Automatik"+enable=true
-                //   heisst dann "warte auf expliziten Sollwert", nicht "WR entscheidet
-                //   selbst" (Fund 30.07.2026, in beide Richtungen reproduziert).
-                // Deshalb schreibt der Aufrufer (optimize()) jetzt explizit, ob er
-                // gerade wirklich die Kontrolle will ($enable=true) oder den WR
-                // autonom laufen lassen will ($enable=false, siehe Fallback-Branch 7).
+                // ctl_ems_enable (Register 47505) ist der Hauptschalter. KORRIGIERT
+                // 29.08.2026 (Dietmar, nach sauberem A/B-Test mit InverterHub -- die
+                // fruehere Fund-25.07.2026-Annahme unten war FALSCH/unvollstaendig):
+                // - =false: der zuletzt kommandierte $mode/$powerW wird vom WR
+                //   ANGENOMMEN UND DAUERHAFT AUSGEFUEHRT, OHNE Heartbeat -- NICHT
+                //   "WR ignoriert den Befehl und faehrt Selbstverbrauchslogik", wie
+                //   frueher angenommen. Um echte Automatik zu erzwingen, muss man
+                //   explizit mode=GW_MODE_AUTO+power=0 SENDEN, nicht einfach nur
+                //   enable=false setzen (siehe handleGoodweDeadman()-Kommentar).
+                // - =true: SEMS+-Portal zeigt "3rd party EMS", aber der Befehl muss
+                //   dann periodisch (< 60-70s) neu geschrieben werden, sonst faellt
+                //   der WR nach ~70-120s ohne Heartbeat selbst auf 255/STOPPED
+                //   zurueck (Fund 30.07.2026 + 29.08.2026, SUITE.md GoodWe-
+                //   Steuerregister-Warnung). $enable=true lohnt sich also nur bei
+                //   laufendem Reassert-Zyklus (unser applyDecision(), alle
+                //   EMS_Interval Sekunden) -- fuer einen einmaligen/seltenen Befehl
+                //   ist $enable=false der zuverlaessigere, unkompliziertere Weg.
+                // Der Aufrufer (optimize()) schreibt weiterhin explizit, welchen
+                // $enable-Wert er will -- die Fallback-Branch (siehe applyFallback())
+                // nutzt bereits enable=false MIT mode=GW_MODE_AUTO, war also schon vor
+                // dieser Korrektur richtig verdrahtet.
                 IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', (bool)$enable);
                 IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', $mode);
                 // IMMER schreiben, auch 0 -- ctl_ems_power (Register 47512) ist in

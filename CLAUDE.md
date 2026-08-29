@@ -31,12 +31,15 @@ Das EMS ist die **einzige koordinierende Instanz** des Verbunds:
   Variablen-ID!). Xmax-/Xset-Semantik der `ctl_ems_mode`-Tabelle in SUITE.md
   beachten: Xset-Modi (4/5/9/10/11/12) sind aktive Ziele, die die Batterie
   anzapfen können — nie `maxW` als Xset übergeben (Branch-3b-Vorfall).
-  `ctl_ems_mode` fällt auf 255 zurück → Sollwert periodisch neu schreiben.
-  **Ursache identifiziert (29.08.2026, SUITE.md GoodWe-Steuerregister):
-  `ctl_ems_enable=true` selbst destabilisiert `ctl_ems_mode` (~70-120s bis
-  255) — EMS' eigener 30s-Reassert-Zyklus liegt bei laufendem `EMS_Active`
-  komfortabel darunter, betroffen sind vor allem manuelle Einzelbefehle
-  ohne Reassert.**
+  `ctl_ems_mode` fällt bei `ctl_ems_enable=true` ohne Heartbeat (< 60-70s)
+  auf 255 zurück (siehe SUITE.md GoodWe-Steuerregister, 29.08.2026, zweifach
+  korrigiert). **Bei `ctl_ems_enable=false` hält ein einmal gesendeter Modus
+  dagegen dauerhaft, ohne Reassert** — für einmalige/seltene Befehle
+  `enable=false` bevorzugen, `enable=true` nur mit laufendem Reassert-Zyklus
+  (EMS' eigener 30s-`applyDecision()`-Zyklus reicht dafür). **Wichtig:**
+  `enable=false` allein fällt NICHT von selbst auf Automatik zurück, es
+  friert nur den zuletzt kommandierten Modus ein — für echte Automatik
+  immer `enable=false` + `mode=1` + `power=0` zusammen senden.
 
 ## Repo-Struktur
 
