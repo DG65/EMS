@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.26.0 (2026-08-29)
+- **Neu: WR-Totmann-Erkennung + -Reaktion, EMS ist ab sofort alleiniger
+  Regler.** Architektur-Übergabe von InverterHub (0.75.0-beta.1): InverterHub
+  ist jetzt reine Kommunikationsschicht ohne eigenen Reassert/Heartbeat/
+  Fallback — EMS übernimmt die Politik. Auslöser: der zweitägige 255/STOPPED-
+  Rückfall wurde als offizieller, beabsichtigter WR-Sicherheitsmechanismus
+  identifiziert (ausbleibender Heartbeat bei `ctl_ems_enable=true` → WR
+  parkt sich nach ~70-120s selbst).
+  - Neue `handleGoodweDeadman()`: liest InverterHubs `ctl_ems_mode`-Variable
+    (echter WR-Ist-Zustand, InverterHub liest zurück), flankengetriggert
+    (nur beim Übergang nach 255, nicht bei jedem Zyklus).
+  - Zwei Nutzer-Szenarien (`WATCHDOG_Deadman_Reaction`, Dietmars Vorgabe,
+    beide gleichwertig): 0 = Sicherheits-Stopp respektieren (Default), 1 =
+    Fallback in WR-Eigenregelung (`ctl_ems_enable=false`).
+  - **Pendel-Bremse:** >3 Totmann-Ereignisse/Stunde → Fallback wird
+    automatisch gestoppt (immer Szenario A), bis manuell über
+    `WATCHDOG_Reset_Brake` zurückgesetzt — verhindert dauerhaftes Ein/Aus-
+    Schalten des WR bei schlechter Verbindung statt echter Einzelvorfälle.
+  - Läuft unabhängig von `EMS_Active` (auch Fremdeinfluss wie SEMS+-App
+    kann 255 auslösen).
+  - **Ist `EMS_Active=false`, wird `ctl_ems_enable` jetzt aktiv auf `false`
+    gehalten** (jeden Zyklus reasserted) — kein "3rd party EMS"-Anspruch
+    ohne tatsächlich aktive Steuerung.
+- **Neu: Risiko-Bestätigung vor Formular-Freischaltung.** Dietmars Vorgabe:
+  "EMS aktiv" und alle Steuerungsfelder (Batterie, Tibber, Wallboxen, §14a,
+  Optimierung, Totmann-Reaktion) sind erst sichtbar, nachdem der Nutzer
+  eine Warnung zu den Risiken aktiver WR-Steuerung explizit bestätigt hat
+  (`EMS_Risk_Acknowledged`). Info-/Status-Panels (Doku, Verbund-Status,
+  News, Benachrichtigungen) bleiben unabhängig davon sichtbar.
+
 ## 0.25.2 (2026-08-28)
 - **Fix: Wallboxen blieben nach Aufhebung der §14a-Lastbegrenzung dauerhaft
   gesperrt (bei EMS_Active=false).** Zweiter Live-Testlauf sofort nach

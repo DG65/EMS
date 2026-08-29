@@ -6,9 +6,35 @@
             "expanded": true,
             "items": [
                 {
+                    "type": "Label",
+                    "caption": "⚠️ EMS greift aktiv in die Wechselrichter-Steuerung ein (Batterie-/Netz-Sollwerte). Fehlerhafte oder unerwartete Steuerbefehle können die Batterie stärker be-/entladen als beabsichtigt oder den Wechselrichter in einen Sicherheits-Stopp versetzen. Bitte erst aktivieren, wenn du das verstanden hast."
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "EMS_Risk_Acknowledged",
+                    "caption": "Ich habe die Risiken der aktiven Steuerung verstanden und möchte fortfahren"
+                },
+                {
                     "type": "CheckBox",
                     "name": "EMS_Active",
                     "caption": "EMS aktiv"
+                },
+                {
+                    "type": "Label",
+                    "caption": "── WR-Sicherheits-Stopp (Totmann) ─────────────────────"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Bleibt der Wechselrichter-Heartbeat aus (z.B. Verbindungsproblem), fällt der WR nach ~70-120s selbständig in einen Sicherheits-Stopp. Wie soll EMS darauf reagieren?"
+                },
+                {
+                    "type": "Select",
+                    "name": "WATCHDOG_Deadman_Reaction",
+                    "caption": "Reaktion auf WR-Sicherheits-Stopp",
+                    "options": [
+                        {"caption": "Sicherheits-Stopp respektieren (nichts tun)", "value": 0},
+                        {"caption": "Fallback in WR-Eigenregelung (Automatik übernimmt)", "value": 1}
+                    ]
                 },
                 {
                     "type": "NumberSpinner",

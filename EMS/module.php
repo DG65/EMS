@@ -85,6 +85,13 @@ class EMS extends IPSModule
         parent::Create();
 
         // ── Allgemein & Schutz ──────────────────────────────────────
+        // Risiko-Bestaetigung (Dietmars Vorgabe 29.08.2026, Teil der WR-
+        // Totmann-Uebergabe): "EMS aktiv" und die uebrigen Steuerungsfelder
+        // sind erst sichtbar, nachdem der Nutzer die Risiken der aktiven
+        // WR-Steuerung ausdruecklich bestaetigt hat (siehe
+        // GetConfigurationForm()). Bewusst getrennt von EMS_Active selbst --
+        // eine reine Anzeige-/Freischalt-Bedingung, keine Steuerentscheidung.
+        $this->RegisterPropertyBoolean('EMS_Risk_Acknowledged', false);
         $this->RegisterPropertyBoolean('EMS_Active',           false);
         $this->RegisterPropertyInteger('EMS_Interval',         30);
         $this->RegisterPropertyInteger('EMS_Max_Power_W',      34500);
@@ -170,6 +177,23 @@ class EMS extends IPSModule
         // TESSIE_GetVehicleState contractVersion 1.4), die Entscheidung
         // "ist das noch heimfahrtrelevant" gehoert zur Tagesplanung.
         $this->RegisterPropertyInteger('VEH_Home_Radius_Km',       200);
+
+        // ── WR-Totmann-Politik (Uebergabe von InverterHub, 29.08.2026) ──
+        // InverterHub ist ab 0.75.0-beta.1 reine Kommunikationsschicht ohne
+        // eigenen Reassert/Heartbeat/Totmann-Fallback -- EMS ist der
+        // EINZIGE Regler und damit auch fuer die Reaktion auf den
+        // WR-eigenen Sicherheits-Stopp (Register faellt bei ausbleibendem
+        // Heartbeat nach ~70-120s auf 255/STOPPED, siehe SUITE.md GoodWe-
+        // Steuerregister) zustaendig. Zwei bewusste Nutzer-Szenarien
+        // (Dietmars Vorgabe, beide gleichwertig, kein technischer Default
+        // "besser"): 0 = Sicherheits-Stopp respektieren (nichts tun, fuer
+        // Anlagen die bei Steuerungsausfall STEHEN BLEIBEN MUESSEN), 1 =
+        // Fallback in WR-Eigenregelung (ctl_ems_enable=false schreiben,
+        // WR faehrt seine native Selbstverbrauchslogik weiter). Default 0
+        // (unveraendert lassen) ist der konservativere/passivere der beiden
+        // und daher als Ausgangswert gewaehlt -- keine automatische
+        // Zusatzaktion ohne bewusste Nutzerentscheidung.
+        $this->RegisterPropertyInteger('WATCHDOG_Deadman_Reaction', 0);
         for ($i = 1; $i <= 2; $i++) {
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_SOC',            0);
             $this->RegisterPropertyInteger('VAR_BAT' . $i . '_Power',          0);
@@ -291,10 +315,16 @@ class EMS extends IPSModule
         $this->RegisterVariableFloat('INVOICE_Ist_MwSt',      'Rechnung: davon MwSt (EUR)',            '', 141);
         $this->RegisterVariableFloat('INVOICE_Ist_Gutschrift','Rechnung: Erstattung/Gutschrift (EUR)', '', 142);
 
+        // WR-Totmann-Anzeige + Pendel-Bremse-Rückstellung (WebFront-nutzbar
+        // nach demselben Muster: echte Variablen + EnableAction).
+        $this->RegisterVariableBoolean('WATCHDOG_Brake_Tripped', '⚠️ Totmann-Bremse ausgelöst (Reset nötig)', '~Alert', 150);
+        $this->RegisterVariableBoolean('WATCHDOG_Reset_Brake',   'Totmann-Bremse zurücksetzen',              '~Switch', 151);
+
         $this->EnableAction('EMS_GridRewards');
         $this->EnableAction('INVOICE_Ist_Betrag');
         $this->EnableAction('INVOICE_Ist_MwSt');
         $this->EnableAction('INVOICE_Ist_Gutschrift');
+        $this->EnableAction('WATCHDOG_Reset_Brake');
 
         // ── Timer ───────────────────────────────────────────────────
         $this->RegisterTimer('EMS_UpdateTimer', 0, 'EMS_Update($_IPS[\'TARGET\']);');
@@ -303,6 +333,14 @@ class EMS extends IPSModule
         $this->RegisterAttributeString('InvoiceHistory', '{}'); // JSON, Key "YYYY-MM"
         $this->RegisterAttributeBoolean('SteuerboxFeedInLimitSetByUs', false);
         $this->RegisterAttributeBoolean('SteuerboxLoadLimitSetByUs', false);
+        // Totmann-Erkennung: letzter gesehener Roh-Modus (fuer Flanken-
+        // Erkennung -- nur beim UEBERGANG nach 255 reagieren, nicht bei
+        // jedem Zyklus erneut, waehrend es schon 255 ist).
+        $this->RegisterAttributeInteger('LastSeenGoodweRawMode', -1);
+        // Pendel-Bremse (Dietmars Vorgabe): JSON-Array der letzten Totmann-
+        // Ausloese-Zeitstempel, auf die letzte Stunde begrenzt.
+        $this->RegisterAttributeString('DeadmanTriggerLog', '[]');
+        $this->RegisterAttributeBoolean('DeadmanBrakeTripped', false);
         $this->RegisterAttributeInteger('LastGoodweMode',    GW_MODE_AUTO);
         $this->RegisterAttributeBoolean('LastGoodweEnable',  true);
         $this->RegisterAttributeInteger('LastWB1Switch',     0);
@@ -670,6 +708,39 @@ class EMS extends IPSModule
             )
         );
 
+        // 6. Risiko-Sperre (Dietmars Vorgabe 29.08.2026, Teil der WR-
+        // Totmann-Uebergabe): Solange die Risiken nicht bestaetigt sind,
+        // bleiben "EMS aktiv" und alle uebrigen Steuerungsfelder verborgen
+        // -- nur die Warnung + Bestaetigungs-Checkbox im "Allgemein"-Panel
+        // sind sichtbar. Informations-/Status-Panels (Doku, Verbund-Status,
+        // News, Benachrichtigungen) bleiben unangetastet, die betreffen
+        // keine Steuerentscheidung. Zweistufig (Haekchen setzen,
+        // Formular neu oeffnen) statt live-reaktiv -- Symcon-Konsolen-
+        // formulare sind nicht feldweise live-reaktiv, ein serverseitiger
+        // Reload beim naechsten GetConfigurationForm()-Aufruf ist der
+        // zuverlaessige Weg.
+        if (!$this->ReadPropertyBoolean('EMS_Risk_Acknowledged')) {
+            $infoWhitelist = array('📖 Dokumentation', '🔗 Verbund-Status', '🆕 Neu in Version', '🔔 Benachrichtigungen');
+            foreach ($form['elements'] as &$element) {
+                if (($element['type'] ?? '') !== 'ExpansionPanel') { continue; }
+                $caption = $element['caption'] ?? '';
+                if ($caption === '🔧 Allgemein') {
+                    // Nur Warnung + Bestaetigungs-Checkbox behalten (die
+                    // ersten zwei Eintraege, siehe form.json-Reihenfolge).
+                    $element['items'] = array_slice($element['items'], 0, 2);
+                    continue;
+                }
+                $isInfo = false;
+                foreach ($infoWhitelist as $prefix) {
+                    if (strpos($caption, $prefix) === 0) { $isInfo = true; break; }
+                }
+                if (!$isInfo) {
+                    $element['visible'] = false;
+                }
+            }
+            unset($element);
+        }
+
         return json_encode($form);
     }
 
@@ -768,7 +839,30 @@ class EMS extends IPSModule
             $this->emsLog(EMS_LOG_BASIC, '§14a-Steuerbox-Fehler (Ausführung läuft unbeeinflusst weiter): ' . $e->getMessage());
         }
 
+        // WR-Totmann-Erkennung + -Reaktion (Uebergabe von InverterHub,
+        // 29.08.2026: InverterHub ist ab 0.75.0-beta.1 reine Kommunikations-
+        // schicht ohne eigenen Reassert/Fallback -- EMS ist der EINZIGE
+        // Regler). Laeuft UNABHAENGIG von EMS_Active, weil 255/STOPPED auch
+        // durch Fremdeinfluss (SEMS+-App, manuelle Tests) auftreten kann.
+        try {
+            $this->handleGoodweDeadman();
+        } catch (Throwable $e) {
+            $this->emsLog(EMS_LOG_BASIC, 'Totmann-Erkennung-Fehler (Ausführung läuft unbeeinflusst weiter): ' . $e->getMessage());
+        }
+
         if (!$this->ReadPropertyBoolean('EMS_Active')) {
+            // Dietmars Vorgabe 29.08.2026: Ist EMS aus, MUSS ctl_ems_enable
+            // aktiv auf false gesetzt sein -- kein "3rd party EMS"-Anspruch
+            // ohne tatsaechlich aktive Steuerung. Reasserted bei jedem
+            // Zyklus (billig, sicher), nicht nur beim Uebergang.
+            try {
+                $inv = $this->getInverterEntry();
+                if ($inv !== null && ($inv['instanceID'] ?? 0) > 0) {
+                    @IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', false);
+                }
+            } catch (Throwable $e) {
+                $this->emsLog(EMS_LOG_BASIC, 'ctl_ems_enable=false-Fehler (EMS inaktiv): ' . $e->getMessage());
+            }
             return;
         }
 
@@ -1205,6 +1299,67 @@ class EMS extends IPSModule
         $raw = @SBH_GetState($list[0]);
         $state = is_string($raw) ? json_decode($raw, true) : $raw;
         return is_array($state) ? $state : null;
+    }
+
+    /**
+     * WR-Totmann-Erkennung + -Reaktion (Uebergabe von InverterHub,
+     * 29.08.2026, siehe SUITE.md GoodWe-Steuerregister-Warnung).
+     * InverterHub liest ctl_ems_mode jeden FastTimer-Zyklus zurueck -- die
+     * IPS-Variable zeigt also den echten WR-Ist-Zustand, inkl. 255/STOPPED.
+     * Flanken-erkannt (nur beim UEBERGANG nach 255 reagieren), nicht bei
+     * jedem Zyklus erneut, waehrend es schon 255 ist -- sonst wuerde die
+     * Pendel-Bremse bei anhaltendem 255-Zustand faelschlich staendig
+     * mitzaehlen statt nur echte, einzelne Ausloesungen.
+     */
+    private function handleGoodweDeadman()
+    {
+        $inv = $this->getInverterEntry();
+        if ($inv === null || ($inv['instanceID'] ?? 0) <= 0) { return; }
+        $modeId = $this->findChildVariableIdByIdent($inv['instanceID'], 'ctl_ems_mode');
+        if ($modeId <= 0) { return; }
+        $raw = (int)@GetValueInteger($modeId);
+
+        $lastSeen = $this->ReadAttributeInteger('LastSeenGoodweRawMode');
+        $this->WriteAttributeInteger('LastSeenGoodweRawMode', $raw);
+        $isNewDeadman = ($raw === 255 && $lastSeen !== 255);
+        if (!$isNewDeadman) { return; }
+
+        // Pendel-Bremse: Ausloese-Zeitstempel protokollieren, auf die
+        // letzte Stunde begrenzen. >3 Ausloesungen/Stunde = vermutlich
+        // schlechte Verbindung statt echter Einzelvorfaelle -- Fallback
+        // (Szenario B) wuerde den WR sonst dauerhaft ein/aus schalten.
+        $now = time();
+        $log = json_decode($this->ReadAttributeString('DeadmanTriggerLog'), true);
+        if (!is_array($log)) { $log = array(); }
+        $log[] = $now;
+        $log = array_values(array_filter($log, function ($ts) use ($now) { return $ts > $now - 3600; }));
+        $this->WriteAttributeString('DeadmanTriggerLog', json_encode($log));
+
+        $wasTripped = $this->ReadAttributeBoolean('DeadmanBrakeTripped');
+        if (!$wasTripped && count($log) > 3) {
+            $this->WriteAttributeBoolean('DeadmanBrakeTripped', true);
+            $this->SetValue('WATCHDOG_Brake_Tripped', true);
+            $this->emsLog(EMS_LOG_BASIC, '🛑 Totmann-Pendel-Bremse ausgelöst: >3 Totmann-Ereignisse in der letzten Stunde -- Fallback in WR-Eigenregelung gestoppt, bis manuell zurückgesetzt (WATCHDOG_Reset_Brake).');
+            $wasTripped = true;
+        }
+
+        $this->emsLog(EMS_LOG_BASIC, '⚠️ WR-Totmann ausgelöst: ctl_ems_mode ist auf 255/STOPPED gefallen (Heartbeat ausgeblieben).');
+
+        if ($wasTripped) {
+            // Bremse aktiv -- immer Szenario A (nichts tun), unabhaengig
+            // von der konfigurierten Reaktion, bis der Nutzer manuell
+            // zurücksetzt.
+            return;
+        }
+
+        $reaction = $this->ReadPropertyInteger('WATCHDOG_Deadman_Reaction');
+        if ($reaction === 1) {
+            // Szenario B: Fallback in WR-Eigenregelung.
+            @IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', false);
+            $this->emsLog(EMS_LOG_BASIC, '↩️ Totmann-Reaktion: Fallback in WR-Eigenregelung (ctl_ems_enable=false).');
+        } else {
+            $this->emsLog(EMS_LOG_BASIC, 'ℹ️ Totmann-Reaktion: Sicherheits-Stopp respektiert, keine weitere Aktion (Szenario A).');
+        }
     }
 
     /**
@@ -2220,6 +2375,18 @@ class EMS extends IPSModule
             // noetig, siehe SUITE.md "Sichtbare Rueckmeldung", Muster 3.
             $this->SetValue($ident, (float)$value);
             $this->saveInvoiceMonth();
+            return;
+        }
+        if ($ident === 'WATCHDOG_Reset_Brake') {
+            // Bewusster manueller Reset der Totmann-Pendel-Bremse
+            // (Dietmars Vorgabe: "Rueckstellung nur durch bewussten
+            // Nutzereingriff"). Der Schalter selbst federt sofort auf Aus
+            // zurueck -- er ist ein Taster, kein Dauerzustand.
+            $this->WriteAttributeBoolean('DeadmanBrakeTripped', false);
+            $this->WriteAttributeString('DeadmanTriggerLog', '[]');
+            $this->SetValue('WATCHDOG_Brake_Tripped', false);
+            $this->SetValue('WATCHDOG_Reset_Brake', false);
+            $this->emsLog(EMS_LOG_BASIC, '✅ Totmann-Pendel-Bremse manuell zurückgesetzt.');
             return;
         }
     }
