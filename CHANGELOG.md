@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.2 (2026-08-29)
+- **Fix: `EMS_Active=false`-Handoff (`enable=false`+`mode=1`+`power=0`) lief
+  bisher jeden `Update()`-Zyklus erneut, nicht nur einmal beim Übergang.**
+  Dietmars Einwand: bei ausgeschaltetem EMS will er die Anlage auch komplett
+  händisch schalten können, ohne dass EMS seine manuellen Änderungen jeden
+  Zyklus wieder überschreibt ("dann brauchst Du diese Werte nicht weiter zu
+  verfolgen"). Neues Attribut `EmsInactiveHandoffDone` sorgt dafür, dass der
+  Dreifach-Befehl nur einmalig beim Übergang aktiv→inaktiv gesendet wird;
+  danach lässt EMS die Finger vom WR, bis es wieder aktiviert wird (Flag
+  wird beim Übergang inaktiv→aktiv zurückgesetzt).
+
 ## 0.26.1 (2026-08-29)
 - **Fix: Szenario B des Totmann-Fallbacks war falsch beschriftet/unwirksam.**
   Dietmars Korrektur, direkt nach 0.26.0: Die Annahme "`ctl_ems_enable=false`

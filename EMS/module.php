@@ -333,6 +333,7 @@ class EMS extends IPSModule
         $this->RegisterAttributeString('InvoiceHistory', '{}'); // JSON, Key "YYYY-MM"
         $this->RegisterAttributeBoolean('SteuerboxFeedInLimitSetByUs', false);
         $this->RegisterAttributeBoolean('SteuerboxLoadLimitSetByUs', false);
+        $this->RegisterAttributeBoolean('EmsInactiveHandoffDone', false);
         // Totmann-Erkennung: letzter gesehener Roh-Modus (fuer Flanken-
         // Erkennung -- nur beim UEBERGANG nach 255 reagieren, nicht bei
         // jedem Zyklus erneut, waehrend es schon 255 ist).
@@ -852,31 +853,38 @@ class EMS extends IPSModule
 
         if (!$this->ReadPropertyBoolean('EMS_Active')) {
             // Dietmars Vorgabe 29.08.2026: Ist EMS aus, MUSS ctl_ems_enable
-            // aktiv auf false gesetzt sein -- kein "3rd party EMS"-Anspruch
-            // ohne tatsaechlich aktive Steuerung. Reasserted bei jedem
-            // Zyklus (billig, sicher), nicht nur beim Uebergang.
+            // einmalig aktiv auf false gesetzt werden -- kein "3rd party
+            // EMS"-Anspruch ohne tatsaechlich aktive Steuerung. Bewusst NUR
+            // EINMALIG pro Uebergang (nicht jeden Zyklus): Dietmar will bei
+            // ausgeschaltetem EMS auch komplett haendisch am WR schalten
+            // koennen, ohne dass wir seine manuellen Aenderungen ueberschreiben
+            // ("dann brauchst Du diese Werte nicht weiter zu verfolgen").
             //
-            // mode=Automatik/power=0 werden bewusst MIT gesendet (Dietmars
-            // Praezisierung, "das waere vermutlich am sichersten, man weiss
-            // ja nie wer am Geraet rumschaltet"): enable=false allein wuerde
-            // nur den ZULETZT kommandierten Modus dauerhaft einfrieren (s.
-            // handleGoodweDeadman()-Kommentar), nicht in echte Automatik
-            // zurueckfallen -- bei deaktiviertem EMS soll die Anlage aber
-            // garantiert in echter Automatik landen, unabhaengig davon, was
-            // zuletzt (auch von fremder Hand, z.B. SEMS+-App) kommandiert
-            // wurde.
-            try {
-                $inv = $this->getInverterEntry();
-                if ($inv !== null && ($inv['instanceID'] ?? 0) > 0) {
-                    @IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', false);
-                    @IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', GW_MODE_AUTO);
-                    @IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', 0);
+            // mode=Automatik/power=0 werden beim Uebergang bewusst MIT
+            // gesendet (Dietmars Praezisierung, "das waere vermutlich am
+            // sichersten, man weiss ja nie wer am Geraet rumschaltet"):
+            // enable=false allein wuerde nur den ZULETZT kommandierten Modus
+            // dauerhaft einfrieren (s. handleGoodweDeadman()-Kommentar),
+            // nicht in echte Automatik zurueckfallen.
+            if (!$this->ReadAttributeBoolean('EmsInactiveHandoffDone')) {
+                try {
+                    $inv = $this->getInverterEntry();
+                    if ($inv !== null && ($inv['instanceID'] ?? 0) > 0) {
+                        @IPS_RequestAction($inv['instanceID'], 'ctl_ems_enable', false);
+                        @IPS_RequestAction($inv['instanceID'], 'ctl_ems_mode', GW_MODE_AUTO);
+                        @IPS_RequestAction($inv['instanceID'], 'ctl_ems_power', 0);
+                    }
+                    $this->WriteAttributeBoolean('EmsInactiveHandoffDone', true);
+                } catch (Throwable $e) {
+                    $this->emsLog(EMS_LOG_BASIC, 'ctl_ems_enable=false-Fehler (EMS inaktiv): ' . $e->getMessage());
                 }
-            } catch (Throwable $e) {
-                $this->emsLog(EMS_LOG_BASIC, 'ctl_ems_enable=false-Fehler (EMS inaktiv): ' . $e->getMessage());
             }
             return;
         }
+
+        // Uebergang EMS aus -> an: naechste Deaktivierung soll den
+        // Einmal-Handoff wieder auslösen.
+        $this->WriteAttributeBoolean('EmsInactiveHandoffDone', false);
 
         try {
             $state      = $this->readState();
