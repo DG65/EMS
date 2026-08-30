@@ -21,6 +21,7 @@ jobs:
         repo:
           - NRGChargerHub
           - NRGCometWiFi
+          - NRGOCPPHub
           - NRGInverterHub
           - NRGMeterHub
           - NRGMigrationsHub
