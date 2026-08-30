@@ -1593,7 +1593,7 @@ class EMS extends IPSModule
      * Fenster sollten vom Trainingsdatensatz ausgeschlossen werden, da sie
      * kein normales Last-/Erzeugungsverhalten widerspiegeln.
      */
-    public function GetSpecialEvents(int $fromTs = 0, int $toTs = 0)
+    public function GetSpecialEvents(int $fromTs, int $toTs)
     {
         $log = json_decode($this->ReadAttributeString('SpecialEventsLog'), true);
         if (!is_array($log)) { $log = array(); }
@@ -2454,7 +2454,7 @@ class EMS extends IPSModule
      * Monat. contractVersion '1.0' -- fuer Dashboard, sobald die Soll-Seite
      * steht, additiv um 'soll'/'abweichung' erweiterbar.
      */
-    public function GetInvoiceCheck($year = 0, $month = 0)
+    public function GetInvoiceCheck(int $year, int $month)
     {
         $year  = $year > 0 ? $year : (int)date('Y');
         $month = $month > 0 ? $month : (int)date('n');
@@ -2477,7 +2477,7 @@ class EMS extends IPSModule
      * normalen Preis-/PV-Logik. Bricht automatisch ab, sobald SOC die
      * Reserve-Grenze erreicht (siehe optimize()).
      */
-    public function StartBatteryBoost(int $minutes = 30)
+    public function StartBatteryBoost(int $minutes)
     {
         $minutes = max(1, min(180, (int)$minutes));
         $this->WriteAttributeInteger('BatteryBoostUntil', time() + $minutes * 60);
@@ -2540,7 +2540,7 @@ class EMS extends IPSModule
      * jedem 30-Sekunden-Update()-Tick, nur wenn wirklich neue Tibber-Daten
      * da sind. $force=true (Formular-Button) erzwingt eine Neuberechnung.
      */
-    public function BuildDayPlan(bool $force = false)
+    public function BuildDayPlan(bool $force)
     {
         $todayJson = $this->getPT15MTodayJson();
 

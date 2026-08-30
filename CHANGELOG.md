@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.26.3 (2026-08-31)
+- **Fix: PHP-Standardwerte auf öffentlichen Vertragsmethoden entfernt**
+  (`GetSpecialEvents`, `GetInvoiceCheck`, `StartBatteryBoost`, `BuildDayPlan`).
+  OCPPHub hat live nachgewiesen (Reflection-Beweis), dass Symcons generierte
+  globale `PREFIX_Methode()`-Funktion PHP-Defaults grundsätzlich ignoriert —
+  jeder Parameter ist dort zwingend, auch wenn der Quellcode einen Default
+  zeigt. Betraf EMS bislang nicht (alle internen Aufrufer übergaben schon
+  explizite Argumente), war aber ein Risiko für künftige externe Aufrufer
+  (z. B. ModbusSlave → `EMS_GetSpecialEvents`). Signaturen jetzt ohne
+  Default, Semantik unverändert. Siehe SUITE.md, Aritäts-Abschnitt.
+
 ## 0.26.2 (2026-08-29)
 - **Fix: `EMS_Active=false`-Handoff (`enable=false`+`mode=1`+`power=0`) lief
   bisher jeden `Update()`-Zyklus erneut, nicht nur einmal beim Übergang.**
