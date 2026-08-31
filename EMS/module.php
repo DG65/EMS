@@ -2354,12 +2354,21 @@ class EMS extends IPSModule
         foreach ((array)($partners['tibber'] ?? array()) as $tib) {
             foreach ((array)($tib['activeControls'] ?? array()) as $ctrl) {
                 $situation[] = array(
-                    'domain'     => $ctrl['type'] ?? 'unknown',
-                    'instanceID' => $ctrl['deviceId'] ?? 0,
-                    'label'      => $ctrl['name'] ?? 'Tibber-gesteuertes Gerät',
-                    'situation'  => 'B',
-                    'source'     => 'tibber',
-                    'writable'   => false,
+                    'domain'        => $ctrl['type'] ?? 'unknown',
+                    // 'instanceID' bewusst NICHT aus $ctrl['deviceId'] befuellt:
+                    // seit TIBBERGR_GetActiveControls contractVersion 2.0
+                    // (31.08.2026) ist deviceId Tibbers EIGENE, nicht-numerische
+                    // Geraete-ID (string) -- keine lokale IPS-Instanz-ID. Andere
+                    // Felder in diesem Array haben bisher immer eine echte
+                    // Instanz-ID getragen; ein Typwechsel int->string auf
+                    // 'instanceID' waere selbst wieder ein stiller Vertragsbruch
+                    // fuer GetSituation()-Konsumenten. Stattdessen eigenes Feld.
+                    'instanceID'    => 0,
+                    'tibberDeviceId'=> $ctrl['deviceId'] ?? null,
+                    'label'         => $ctrl['name'] ?? 'Tibber-gesteuertes Gerät',
+                    'situation'     => 'B',
+                    'source'        => 'tibber',
+                    'writable'      => false,
                 );
             }
         }

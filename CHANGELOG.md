@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.26.4 (2026-08-31)
+- **Fix: `GetSituation()` reagiert auf `TIBBERGR_GetActiveControls` Major-Bruch
+  (contractVersion 1.0 → 2.0).** Tibber Grid Reward liefert `deviceId` jetzt
+  als Tibbers eigene `vehicleId`/`batteryId` (string) statt hart `0` (int).
+  EMS hatte das bisher direkt (und folgenlos, weil immer 0) als `instanceID`
+  in `GetSituation()`s Tibber-Einträge übernommen — mit der echten ID wäre
+  das ein stiller Typwechsel int→string auf `instanceID` gewesen, ein
+  eigener stiller Vertragsbruch für `GetSituation()`-Konsumenten. Fix:
+  `instanceID` bleibt `0` (EMS hat keine lokale Instanz für diesen
+  Tibber-Eintrag), Tibbers ID steht jetzt additiv im neuen Feld
+  `tibberDeviceId`.
+
 ## 0.26.3 (2026-08-31)
 - **Fix: PHP-Standardwerte auf öffentlichen Vertragsmethoden entfernt**
   (`GetSpecialEvents`, `GetInvoiceCheck`, `StartBatteryBoost`, `BuildDayPlan`).
