@@ -1,17 +1,23 @@
 # EMS — Hinweise für die Arbeit an diesem Repository
 
-## Zuerst lesen: SUITE.md (liegt hier im Repo)
+## Zuerst lesen: SUITE.md (liegt lokal, NICHT im Repo)
 
-Dieses Repo ist die **Koordinationszentrale des NRG-Stack**. `SUITE.md` im
-Repo-Root ist das verbindliche Verbund-Manifest: Zielbild, Vertragsmodell
-(`contractVersion`), `NRG.*`-Profile, Formular-Konvention, Store-Review-
-Checkliste, IPS-Stolperfallen, GoodWe-Register, Manifest-Tabelle aller
-Modulstände. **Jede Session hier liest SUITE.md, bevor sie etwas ändert.**
+Dieses Repo war bis 31.08.2026 die Koordinationszentrale des NRG-Stack.
+**SUITE.md liegt seit 31.08.2026 bewusst NICHT mehr in diesem (öffentlichen)
+Repo**, sondern ausschließlich lokal unter
+`/Users/dietmar/Nextcloud/Claude/SUITE.md` — Grund: die Modul-Repos sind auf
+GitHub öffentlich, SUITE.md enthält aber das gesamte Architektur-/
+Debugging-Know-how des Verbunds (Dietmars Entscheidung). Ein eigenes,
+NICHT auf GitHub verbundenes lokales Git-Repo (`git init` ohne Remote,
+direkt in `/Users/dietmar/Nextcloud/Claude/`) hält die Versionshistorie.
+Die komplette bisherige SUITE.md-Historie wurde außerdem aus DIESEM Repos
+Vergangenheit entfernt (`git filter-repo` + Force-Push, 31.08.2026) — alte
+Commit-Hashes vor diesem Zeitpunkt sind dadurch ungültig geworden.
 
-Änderungen an Verbund-Konventionen werden AUSSCHLIESSLICH in SUITE.md hier
-gepflegt. Der Workflow `.github/workflows/sync-suite.yml` verteilt bei jedem
-Push (Branches `ems-integration`/`main`) automatisch eine Read-only-Kopie in
-alle Modul-Repos — die Kopien dort nie direkt editieren.
+**Jede Session liest die lokale SUITE.md, bevor sie etwas ändert.**
+Änderungen an Verbund-Konventionen werden AUSSCHLIESSLICH dort gepflegt.
+Der frühere `sync-suite.yml`-Verteil-Workflow existiert nicht mehr — es gibt
+nur noch die eine lokale Datei, kein Verteilen mehr nötig.
 
 ## Rolle des EMS-Moduls
 
@@ -44,9 +50,8 @@ Das EMS ist die **einzige koordinierende Instanz** des Verbunds:
 ## Repo-Struktur
 
 - `EMS/` — das Symcon-Modul (module.php, form.json, module.json)
-- `SUITE.md` — Verbund-Manifest (Quelle, wird in alle Repos synchronisiert)
 - `.github/workflows/check-style.yml` — `php -l` über alle PHP-Dateien
-- `.github/workflows/sync-suite.yml` — SUITE.md-Verteilung in die Modul-Repos
+- SUITE.md liegt NICHT hier, siehe oben (`/Users/dietmar/Nextcloud/Claude/SUITE.md`)
 
 ## Branch-Modell
 
