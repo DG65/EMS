@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.0 (2026-09-01)
+- **Neuer Vertrag `EMS_GetCurrentDecision()` 1.0** (Dashboard-Anfrage, für
+  die Demo-Kachel und generell): zeigt lesend, WAS das EMS gerade schaltet
+  und WARUM — `mode`/`modeCode`, `reason` (Klartext), `source`
+  (`netzbetreiber`/`tibber`/`stromgedacht`/`tagesplan`/`nutzer`/`ems`, je
+  nachdem welche Ebene der Prioritätshierarchie gerade entscheidet),
+  `since` (Zeitpunkt des letzten echten Moduswechsels, nicht jedes
+  Reassert), `active`. Dafür taggt jeder Entscheidungszweig in
+  `optimize()`/`applyPlanSlot()` jetzt sein `source`-Feld.
+
 ## 0.26.4 (2026-08-31)
 - **Fix: `GetSituation()` reagiert auf `TIBBERGR_GetActiveControls` Major-Bruch
   (contractVersion 1.0 → 2.0).** Tibber Grid Reward liefert `deviceId` jetzt

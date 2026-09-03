@@ -347,6 +347,7 @@ class EMS extends IPSModule
         $this->RegisterAttributeInteger('LastWB1Switch',     0);
         $this->RegisterAttributeInteger('LastWB2Switch',     0);
         $this->RegisterAttributeInteger('LastDecision',      0);
+        $this->RegisterAttributeString('LastDecisionSource', 'ems');
         $this->RegisterAttributeInteger('ConsecutiveErrors', 0);
         $this->RegisterAttributeInteger('BatteryBoostUntil', 0);
         $this->RegisterAttributeInteger('LastDiscoveryTs',   0);
@@ -2287,6 +2288,42 @@ class EMS extends IPSModule
      * damit diese Funktion beliebig oft ohne Netzwerk-/Modbus-Last
      * aufgerufen werden kann.
      */
+    /**
+     * Vertrag fuer Anzeige-Konsumenten (Dashboard u.a.): WAS das EMS
+     * aktuell schaltet und WARUM, rein lesend. 'since' aendert sich nur
+     * bei echtem Moduswechsel, nicht bei jedem 30s-Reassert-Zyklus (siehe
+     * applyDecision() -- Cooldown-/Reassert-Logik). 'source' beschreibt,
+     * welche Ebene der Prioritaetshierarchie (Gesetz/Netzbetreiber >
+     * Vermarkter > EMS-Optimierung > Komfort) gerade den Ausschlag gibt:
+     * 'netzbetreiber' (§14a-Zwangsvorgabe), 'tibber' (Grid Rewards),
+     * 'stromgedacht' (Gruenste Ladezeit), 'tagesplan' (EMS' eigener
+     * Preis-/PV-Tagesplan), 'nutzer' (manueller Batterie-Boost) oder
+     * 'ems' (reaktiver Fallback ohne Tagesplan).
+     */
+    public function GetCurrentDecision(): array
+    {
+        $opMode = (int)$this->GetValue('EMS_Mode');
+        $opModeLabels = array(
+            EMS_OP_AUTO        => 'Automatik',
+            EMS_OP_PV_SELFUSE  => 'PV-Eigenverbrauch',
+            EMS_OP_NET_CHARGE  => 'Netzladen',
+            EMS_OP_DISCHARGE   => 'Entladen',
+            EMS_OP_STANDBY     => 'Bereitschaft',
+            EMS_OP_EXPORT      => 'Export',
+            EMS_OP_BACKUP      => 'Inselbetrieb/Backup',
+            EMS_OP_GRIDREWARDS => 'Grid Rewards (Tibber)',
+        );
+        return array(
+            'contractVersion' => '1.0',
+            'active'          => $this->ReadPropertyBoolean('EMS_Active'),
+            'mode'            => $opModeLabels[$opMode] ?? 'unbekannt',
+            'modeCode'        => $opMode,
+            'reason'          => (string)$this->GetValue('EMS_LastAction'),
+            'source'          => $this->ReadAttributeString('LastDecisionSource'),
+            'since'           => $this->ReadAttributeInteger('LastDecision'),
+        );
+    }
+
     public function GetSituation()
     {
         $partners = $this->GetPartners();
@@ -2814,6 +2851,7 @@ class EMS extends IPSModule
             'wb1_enable' => $wb1En,
             'wb2_enable' => $wb2En,
             'reason'     => 'Tagesplan: ' . ($slot['reason'] ?? ''),
+            'source'     => 'tagesplan',
         );
     }
 
@@ -3332,6 +3370,7 @@ class EMS extends IPSModule
             'wb1_enable' => false,
             'wb2_enable' => false,
             'reason'     => '',
+            'source'     => 'ems',
         );
 
         // ── §14a-Netzbetreiber-Dimmung (SteuerboxHub, SBH_GetState) ─────
@@ -3359,6 +3398,7 @@ class EMS extends IPSModule
                 '⚡ §14a-Lastbegrenzung aktiv (Netzbetreiber): Wallboxen aus, max. %.1f kW',
                 (float)($steuerbox['loadPMin'] ?? 0)
             );
+            $d['source'] = 'netzbetreiber';
             return $d;
         }
 
@@ -3381,6 +3421,7 @@ class EMS extends IPSModule
                 'Grid Rewards: Tibber steuert WB, Import-Limit=%.0fW (Haus=%.0fW WB=%.0fW)',
                 $importLimit, $houseW, $wbTotalW
             );
+            $d['source'] = 'tibber';
             return $d;
         }
 
@@ -3405,6 +3446,7 @@ class EMS extends IPSModule
                     '🚀 Batterie-Boost aktiv (noch %ds): volle Entladung fuer Schnellladen, SOC=%.0f%%',
                     $boostUntil - time(), $s['bat_soc']
                 );
+                $d['source'] = 'nutzer';
                 return $d;
             }
             // SOC-Grenze erreicht -- Boost frueher als geplant beenden, statt
@@ -3456,6 +3498,7 @@ class EMS extends IPSModule
                     'Gruenste Ladezeit: GSI=%.0f >= %.0f, Netz laden',
                     $greenScore, $greenThreshold
                 );
+                $d['source'] = 'stromgedacht';
                 return $d;
             }
         }
@@ -3638,6 +3681,7 @@ class EMS extends IPSModule
         $this->SetValue('EMS_Mode',       $d['op_mode']);
         $this->SetValue('EMS_LastAction', $d['reason']);
         $this->SetValue('EMS_Status',     'OK: ' . $d['reason']);
+        $this->WriteAttributeString('LastDecisionSource', $d['source'] ?? 'ems');
     }
 
     /**
