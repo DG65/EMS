@@ -2281,14 +2281,6 @@ class EMS extends IPSModule
     // ----------------------------------------------------------------
 
     /**
-     * Wertet die zuletzt per Discover() gefundenen Partnerdaten aus und
-     * bestimmt je steuerbarem Geraet, ob das EMS schreiben darf
-     * (Situation A) oder nur beobachten muss (Situation B), inkl. Quelle.
-     * Liest NICHTS live nach — arbeitet auf dem PartnerCache-Attribut,
-     * damit diese Funktion beliebig oft ohne Netzwerk-/Modbus-Last
-     * aufgerufen werden kann.
-     */
-    /**
      * Vertrag fuer Anzeige-Konsumenten (Dashboard u.a.): WAS das EMS
      * aktuell schaltet und WARUM, rein lesend. 'since' aendert sich nur
      * bei echtem Moduswechsel, nicht bei jedem 30s-Reassert-Zyklus (siehe
@@ -2313,17 +2305,52 @@ class EMS extends IPSModule
             EMS_OP_BACKUP      => 'Inselbetrieb/Backup',
             EMS_OP_GRIDREWARDS => 'Grid Rewards (Tibber)',
         );
+        $reason = (string)$this->GetValue('EMS_LastAction');
+
+        // Nutzer-Rueckmeldung (Dashboard, 01.09.2026): wirkt auf den ersten
+        // Blick widerspruechlich, wenn die Batterie fuers Haus entlaedt UND
+        // gleichzeitig ein Fahrzeug per Tibber Grid Rewards aus dem Netz
+        // laedt -- ist aber wirtschaftlich korrekt: die Grid-Reward-
+        // Einspeisepraemie (VAR_TIB_Feed_Tariff) waere futsch, wuerde die
+        // Batterie stattdessen fuers Auto verwendet. Nur bei EXPORT/DISCHARGE
+        // pruefen (das sind die Faelle, in denen ein Nutzer das Nebeneinander
+        // ueberhaupt bemerken wuerde), damit der Zusatztext nicht bei jedem
+        // Fahrzeug-Ladevorgang unnoetig dranhaengt.
+        if (in_array($opMode, array(EMS_OP_DISCHARGE, EMS_OP_EXPORT), true)) {
+            $partners = $this->GetPartners();
+            foreach ((array)($partners['tessie'] ?? array()) as $veh) {
+                if (($veh['charging'] ?? false) && ($veh['scheduledChargingActive'] ?? false)) {
+                    $feedTariff = (float)$this->readVar('VAR_TIB_Feed_Tariff', 0.1836);
+                    $reason .= sprintf(
+                        ' (Fahrzeug lädt parallel via Tibber Grid Rewards aus dem Netz -- wirtschaftlich '
+                        . 'gewollt: die Grid-Reward-Einspeiseprämie von %.2fct/kWh ginge verloren, würde '
+                        . 'die Batterie stattdessen fürs Auto verwendet.)',
+                        $feedTariff * 100
+                    );
+                    break;
+                }
+            }
+        }
+
         return array(
             'contractVersion' => '1.0',
             'active'          => $this->ReadPropertyBoolean('EMS_Active'),
             'mode'            => $opModeLabels[$opMode] ?? 'unbekannt',
             'modeCode'        => $opMode,
-            'reason'          => (string)$this->GetValue('EMS_LastAction'),
+            'reason'          => $reason,
             'source'          => $this->ReadAttributeString('LastDecisionSource'),
             'since'           => $this->ReadAttributeInteger('LastDecision'),
         );
     }
 
+    /**
+     * Wertet die zuletzt per Discover() gefundenen Partnerdaten aus und
+     * bestimmt je steuerbarem Geraet, ob das EMS schreiben darf
+     * (Situation A) oder nur beobachten muss (Situation B), inkl. Quelle.
+     * Liest NICHTS live nach — arbeitet auf dem PartnerCache-Attribut,
+     * damit diese Funktion beliebig oft ohne Netzwerk-/Modbus-Last
+     * aufgerufen werden kann.
+     */
     public function GetSituation()
     {
         $partners = $this->GetPartners();

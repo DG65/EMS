@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.27.1 (2026-09-01)
+- **`EMS_GetCurrentDecision()`: Erklärung für Batterie-Entladung parallel zu
+  Fahrzeug-Ladung via Tibber Grid Rewards** (Dietmars Rückmeldung über
+  Dashboard). Sieht auf den ersten Blick widersprüchlich aus (Batterie
+  entlädt fürs Haus, Auto lädt gleichzeitig aus dem Netz) — ist aber
+  wirtschaftlich korrekt: die Grid-Reward-Einspeiseprämie ginge verloren,
+  würde die Batterie stattdessen fürs Auto verwendet. `reason` bekommt bei
+  DISCHARGE/EXPORT + aktiver Tibber-Fahrzeugladung jetzt automatisch einen
+  erklärenden Zusatz mit dem aktuellen Prämiensatz.
+
 ## 0.27.0 (2026-09-01)
 - **Neuer Vertrag `EMS_GetCurrentDecision()` 1.0** (Dashboard-Anfrage, für
   die Demo-Kachel und generell): zeigt lesend, WAS das EMS gerade schaltet
