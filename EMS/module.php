@@ -67,12 +67,15 @@ define('GUID_LFC', '{DC5AD508-507F-40EA-8630-0959AED83050}');
 // Prioritaet -- siehe SUITE.md "§14a-Lastabwurf-Priorisierung")
 define('GUID_STEUERBOXHUB', '{B76BE0BA-DF99-4B81-81BD-636A610011EE}');
 
-// Tile Visualization (WebFront-Kachelseite) -- fuer WFC_PushNotification()
-// Ziel-InstanceID. NIEMALS hart hinterlegen (Grundregel "keine eigene Anlage
-// als Norm"): jeder Nutzer hat eine andere Instanz-ID/andere Kachelseiten.
-// Property NOTIFY_Visualization_ID laesst den Nutzer explizit auswaehlen,
-// siehe GetVisualizationInstances()/checkFederationHealthAlarm().
-define('GUID_TILEVISUALIZATION', '{B5B875BB-9B76-45FD-4E67-2607E45B3AC4}');
+// WebFront-Modul (Konfigurator) -- fuer WFC_PushNotification() Ziel-InstanceID.
+// Verwechslungsgefahr: Symcons Kern-GUID {B5B875BB-...} heisst "Tile
+// Visualization" und braucht VISU_PostNotification() statt WFC_PushNotification()
+// (siehe github.com/symcon/Benachrichtigung, Notification/module.php,
+// SetNotifyLevel()) -- NICHT diese hier verwenden. NIEMALS hart hinterlegen
+// (Grundregel "keine eigene Anlage als Norm"): jeder Nutzer hat eine andere
+// Instanz-ID. Property NOTIFY_Visualization_ID laesst den Nutzer explizit
+// auswaehlen, siehe GetWebFrontInstances()/checkFederationHealthAlarm().
+define('GUID_WEBFRONT', '{3565B1F2-8F7B-4311-A4B6-1BF1D868F39E}');
 
 class EMS extends IPSModule
 {
@@ -682,8 +685,8 @@ class EMS extends IPSModule
         }
 
         // 5. "Benachrichtigungen" — aktive Ausfall-Meldung (Dietmar, 04.08.2026).
-        // Auswahlliste dynamisch aus GetVisualizationInstances(), NIE eine
-        // Instanz-ID hart hinterlegen -- jeder Nutzer hat andere Kachelseiten.
+        // Auswahlliste dynamisch aus GetWebFrontInstances(), NIE eine
+        // Instanz-ID hart hinterlegen -- jeder Nutzer hat andere WebFront-IDs.
         $form['elements'][] = array(
             'type'     => 'ExpansionPanel',
             'caption'  => '🔔 Benachrichtigungen',
@@ -696,8 +699,8 @@ class EMS extends IPSModule
                 array(
                     'type'    => 'Select',
                     'name'    => 'NOTIFY_Visualization_ID',
-                    'caption' => 'Kachelseite für Push-Benachrichtigung',
-                    'options' => $this->GetVisualizationInstances(),
+                    'caption' => 'WebFront für Push-Benachrichtigung',
+                    'options' => $this->GetWebFrontInstances(),
                 ),
                 array(
                     'type'    => 'NumberSpinner',
@@ -1200,16 +1203,16 @@ class EMS extends IPSModule
     }
 
     /**
-     * Findet alle installierten "Tile Visualization"-Instanzen (WebFront-
-     * Kachelseiten) fuer die Formular-Auswahlliste von NOTIFY_Visualization_ID.
-     * Oeffentlich, damit form.json sie live per Select-Value-Callback anzeigen
-     * kann -- NIE eine Instanz-ID hart hinterlegen (Grundregel "keine eigene
-     * Anlage als Norm"), jeder Nutzer hat andere IDs/andere Kachelseiten.
+     * Findet alle installierten WebFront-Instanzen fuer die Formular-
+     * Auswahlliste von NOTIFY_Visualization_ID. Oeffentlich, damit form.json
+     * sie live per Select-Value-Callback anzeigen kann -- NIE eine Instanz-ID
+     * hart hinterlegen (Grundregel "keine eigene Anlage als Norm"), jeder
+     * Nutzer hat andere WebFront-IDs.
      */
-    public function GetVisualizationInstances()
+    public function GetWebFrontInstances()
     {
         $out = array(array('caption' => '(deaktiviert)', 'value' => 0));
-        foreach (IPS_GetInstanceListByModuleID(GUID_TILEVISUALIZATION) as $id) {
+        foreach (IPS_GetInstanceListByModuleID(GUID_WEBFRONT) as $id) {
             $out[] = array(
                 'caption' => IPS_GetName($id) . ' (#' . $id . ')',
                 'value'   => $id,
